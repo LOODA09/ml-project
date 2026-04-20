@@ -92,6 +92,7 @@ def canonicalize_dataset_schema(df: pd.DataFrame) -> pd.DataFrame:
         "previous_cancellations": "no_of_previous_cancellations",
         "reserved_room_type": "room_type_reserved",
         "arrival_date_year": "arrival_year",
+        "arrival_date_week_number": "arrival_week_number",
         "arrival_date_day_of_month": "arrival_date",
     }
     available_renames = {
@@ -121,11 +122,16 @@ def basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
         if column in df.columns:
             df = df.drop(columns=column)
 
+    for column in ["agent"]:
+        if column in df.columns:
+            df[column] = df[column].astype("string")
+
     categorical_columns = df.select_dtypes(include=["object", "string", "category"]).columns
     for column in categorical_columns:
         mode = df[column].mode(dropna=True)
         fill_value = mode.iloc[0] if not mode.empty else "Unknown"
         df[column] = df[column].fillna(fill_value)
+        df[column] = df[column].astype(str).replace({"": fill_value})
 
     numeric_columns = df.select_dtypes(exclude="object").columns
     for column in numeric_columns:

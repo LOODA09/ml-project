@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
+from category_encoders import TargetEncoder
 from imblearn.over_sampling import SMOTENC
 from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -19,6 +21,40 @@ class FeatureSchema:
     numeric_columns: list[str]
     low_cardinality_columns: list[str]
     high_cardinality_columns: list[str]
+
+
+class RegularizedTargetEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self, columns: list[str] | None = None, min_samples_leaf: int = 20, smoothing: float = 10.0):
+        self.columns = columns
+        self.min_samples_leaf = min_samples_leaf
+        self.smoothing = smoothing
+
+    def fit(self, x, y):
+        x_frame = pd.DataFrame(x).copy()
+        if self.columns is not None:
+            x_frame.columns = list(self.columns)
+        self.feature_names_in_ = x_frame.columns.astype(str).tolist()
+        self.encoder_ = TargetEncoder(
+            cols=self.feature_names_in_,
+            min_samples_leaf=self.min_samples_leaf,
+            smoothing=self.smoothing,
+            handle_missing="value",
+            handle_unknown="value",
+            return_df=True,
+        )
+        self.encoder_.fit(x_frame, y)
+        return self
+
+    def transform(self, x):
+        x_frame = pd.DataFrame(x).copy()
+        x_frame.columns = self.feature_names_in_
+        transformed = self.encoder_.transform(x_frame)
+        return transformed.to_numpy(dtype=float)
+
+    def get_feature_names_out(self, input_features=None):
+        if input_features is None:
+            input_features = self.feature_names_in_
+        return np.asarray(list(input_features), dtype=object)
 
 
 class RawFeaturePreprocessor(BaseEstimator, TransformerMixin):
@@ -40,16 +76,29 @@ class RawFeaturePreprocessor(BaseEstimator, TransformerMixin):
 
         self.categorical_fill_values_: dict[str, str] = {}
         self.categorical_categories_: dict[str, list[str]] = {}
+        self.high_cardinality_keep_values_: dict[str, set[str]] = {}
+        rare_threshold = max(
+            CONFIG.rare_category_min_count,
+            int(len(x_frame) * CONFIG.rare_category_min_frequency_ratio),
+        )
         for column in self.categorical_columns_:
             series = x_frame[column].astype("string")
             mode = series.mode(dropna=True)
             fill_value = str(mode.iloc[0]) if not mode.empty else "Unknown"
             cleaned = series.fillna(fill_value).astype(str).replace({"": fill_value})
+            if column in self.schema.high_cardinality_columns:
+                counts = cleaned.value_counts()
+                keep_values = set(counts[counts >= rare_threshold].index.tolist())
+                keep_values.add("Unknown")
+                cleaned = cleaned.where(cleaned.isin(keep_values), "Other")
+                self.high_cardinality_keep_values_[column] = keep_values
             categories = sorted(cleaned.unique().tolist())
             if fill_value not in categories:
                 categories.append(fill_value)
             if "Unknown" not in categories:
                 categories.append("Unknown")
+            if column in self.schema.high_cardinality_columns and "Other" not in categories:
+                categories.append("Other")
             self.categorical_fill_values_[column] = fill_value
             self.categorical_categories_[column] = categories
 
@@ -66,7 +115,11 @@ class RawFeaturePreprocessor(BaseEstimator, TransformerMixin):
             categories = self.categorical_categories_[column]
             fill_value = self.categorical_fill_values_[column]
             series = x_frame[column].astype("string").fillna(fill_value).astype(str)
-            series = series.where(series.isin(categories), "Unknown")
+            if column in self.schema.high_cardinality_columns:
+                keep_values = self.high_cardinality_keep_values_.get(column, set())
+                series = series.where(series.isin(keep_values), "Other")
+            else:
+                series = series.where(series.isin(categories), "Unknown")
             x_frame[column] = pd.Categorical(series, categories=categories)
 
         return x_frame
@@ -79,8 +132,14 @@ def infer_feature_schema(x: pd.DataFrame) -> FeatureSchema:
     categorical_columns = x.select_dtypes(include=["object", "string", "category"]).columns.tolist()
     numeric_columns = [column for column in numeric_columns if column not in categorical_columns]
 
-    low_cardinality_columns = list(categorical_columns)
+    low_cardinality_columns: list[str] = []
     high_cardinality_columns: list[str] = []
+    for column in categorical_columns:
+        cardinality = x[column].astype("string").nunique(dropna=True)
+        if cardinality > CONFIG.low_cardinality_threshold:
+            high_cardinality_columns.append(column)
+        else:
+            low_cardinality_columns.append(column)
 
     return FeatureSchema(
         numeric_columns=numeric_columns,
@@ -89,13 +148,24 @@ def infer_feature_schema(x: pd.DataFrame) -> FeatureSchema:
     )
 
 
-def build_preprocessor(schema: FeatureSchema) -> ColumnTransformer:
-    numeric_pipeline = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-        ]
-    )
+def _is_tree_based_model(model) -> bool:
+    return model.__class__.__name__ in {"DecisionTreeClassifier", "RandomForestClassifier"}
+
+
+def build_preprocessor(schema: FeatureSchema, model=None) -> ColumnTransformer:
+    if _is_tree_based_model(model):
+        numeric_pipeline = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+            ]
+        )
+    else:
+        numeric_pipeline = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+            ]
+        )
 
     low_cardinality_pipeline = Pipeline(
         steps=[
@@ -103,12 +173,32 @@ def build_preprocessor(schema: FeatureSchema) -> ColumnTransformer:
             ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
         ]
     )
+    transformers: list[tuple[str, object, list[str]]] = [
+        ("num", numeric_pipeline, schema.numeric_columns),
+        ("low_cat", low_cardinality_pipeline, schema.low_cardinality_columns),
+    ]
+    if schema.high_cardinality_columns:
+        transformers.append(
+            (
+                "high_cat",
+                Pipeline(
+                    steps=[
+                        (
+                            "target",
+                            RegularizedTargetEncoder(
+                                columns=schema.high_cardinality_columns,
+                                min_samples_leaf=CONFIG.target_encoder_min_samples_leaf,
+                                smoothing=CONFIG.target_encoder_smoothing,
+                            ),
+                        ),
+                    ]
+                ),
+                schema.high_cardinality_columns,
+            )
+        )
 
     return ColumnTransformer(
-        transformers=[
-            ("num", numeric_pipeline, schema.numeric_columns),
-            ("low_cat", low_cardinality_pipeline, schema.low_cardinality_columns),
-        ],
+        transformers=transformers,
         remainder="drop",
         sparse_threshold=0.0,
     )
@@ -134,7 +224,7 @@ def build_training_pipeline(model, schema: FeatureSchema) -> ImbPipeline:
 
     steps.extend(
         [
-            ("preprocess", build_preprocessor(schema)),
+            ("preprocess", build_preprocessor(schema, model)),
             ("model", model),
         ]
     )

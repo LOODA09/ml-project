@@ -774,47 +774,56 @@ def get_reference_data_paths() -> list[Path]:
 
 
 @st.cache_data(show_spinner=False)
-def load_unique_options(column: str, fallback: tuple[str, ...]) -> list[str]:
+def load_reference_frames() -> list[pd.DataFrame]:
+    frames: list[pd.DataFrame] = []
     for path in get_reference_data_paths():
-        if path.exists():
-            try:
-                values = pd.read_csv(path, usecols=[column])[column]
-                options = sorted(values.dropna().astype(str).unique().tolist())
-                if options:
-                    return options
-            except Exception:
-                continue
+        if not path.exists():
+            continue
+        try:
+            if path.name == "training_input_snapshot.csv":
+                frames.append(pd.read_csv(path))
+            else:
+                frames.append(basic_cleaning(load_dataset(path)))
+        except Exception:
+            continue
+    return frames
+
+
+@st.cache_data(show_spinner=False)
+def load_unique_options(column: str, fallback: tuple[str, ...]) -> list[str]:
+    for frame in load_reference_frames():
+        if column in frame.columns:
+            values = frame[column]
+            options = sorted(values.dropna().astype(str).unique().tolist())
+            if options:
+                return options
     return list(fallback)
 
 
 @st.cache_data(show_spinner=False)
 def load_reference_profile() -> dict:
-    for path in get_reference_data_paths():
-        if path.exists():
-            try:
-                df = pd.read_csv(path)
-                profile: dict[str, dict] = {}
-                for column in df.columns:
-                    series = df[column].dropna()
-                    if series.empty:
-                        continue
-                    if pd.api.types.is_numeric_dtype(series):
-                        profile[column] = {
-                            "type": "numeric",
-                            "min": float(series.min()),
-                            "max": float(series.max()),
-                            "q01": float(series.quantile(0.01)),
-                            "q99": float(series.quantile(0.99)),
-                            "median": float(series.median()),
-                        }
-                    else:
-                        profile[column] = {
-                            "type": "categorical",
-                            "top_values": series.astype(str).value_counts().head(10).index.tolist(),
-                        }
-                return profile
-            except Exception:
+    for df in load_reference_frames():
+        profile: dict[str, dict] = {}
+        for column in df.columns:
+            series = df[column].dropna()
+            if series.empty:
                 continue
+            if pd.api.types.is_numeric_dtype(series):
+                profile[column] = {
+                    "type": "numeric",
+                    "min": float(series.min()),
+                    "max": float(series.max()),
+                    "q01": float(series.quantile(0.01)),
+                    "q99": float(series.quantile(0.99)),
+                    "median": float(series.median()),
+                }
+            else:
+                profile[column] = {
+                    "type": "categorical",
+                    "top_values": series.astype(str).value_counts().head(10).index.tolist(),
+                }
+        if profile:
+            return profile
     return {}
 
 
@@ -1176,6 +1185,8 @@ def prettify_feature_label(feature_name: str) -> str:
     feature_name = str(feature_name)
     if feature_name.startswith("num__"):
         return feature_name.replace("num__", "", 1)
+    if feature_name.startswith("high_cat__"):
+        return feature_name.replace("high_cat__", "", 1)
     if feature_name.startswith("low_cat__"):
         label = feature_name.replace("low_cat__", "", 1)
         parts = label.split("_")
@@ -1191,6 +1202,10 @@ def prettify_feature_label(feature_name: str) -> str:
 
 def build_input_form() -> tuple[dict, bool]:
     st.subheader("Booking Intake")
+    hotel_options = load_unique_options(
+        "hotel",
+        ("City Hotel", "Resort Hotel"),
+    )
     meal_options = load_unique_options(
         "type_of_meal_plan",
         ("BB", "HB", "SC", "FB", "Undefined"),
@@ -1198,6 +1213,14 @@ def build_input_form() -> tuple[dict, bool]:
     market_segment_options = load_unique_options(
         "market_segment_type",
         ("Online TA", "Offline TA/TO", "Direct", "Corporate", "Groups", "Complementary", "Aviation"),
+    )
+    distribution_channel_options = load_unique_options(
+        "distribution_channel",
+        ("TA/TO", "Direct", "Corporate", "GDS", "Undefined"),
+    )
+    customer_type_options = load_unique_options(
+        "customer_type",
+        ("Transient", "Transient-Party", "Contract", "Group"),
     )
     deposit_options = load_unique_options(
         "deposit_type",
@@ -1228,6 +1251,7 @@ def build_input_form() -> tuple[dict, bool]:
         with stay_tab:
             col1, col2, col3 = st.columns(3)
             with col1:
+                hotel = st.selectbox("Hotel", hotel_options, index=0)
                 lead_time = st.number_input("Lead Time", min_value=0, value=45)
                 arrival_month_name = st.selectbox(
                     "Arrival Month",
@@ -1260,13 +1284,18 @@ def build_input_form() -> tuple[dict, bool]:
             col1, col2, col3 = st.columns(3)
             with col1:
                 market_segment_type = st.selectbox("Market Segment", market_segment_options, index=0)
+                distribution_channel = st.selectbox("Distribution Channel", distribution_channel_options, index=0)
                 deposit_type = st.selectbox("Deposit Policy", deposit_options, index=0)
             with col2:
+                customer_type = st.selectbox("Customer Type", customer_type_options, index=0)
                 avg_price_per_room = st.number_input("Average Price Per Room", min_value=0.0, value=95.0, step=1.0)
                 required_car_parking_space = st.selectbox("Parking Needed", [0, 1], index=0)
             with col3:
                 repeated_guest = st.selectbox("Repeated Guest", [0, 1], index=0)
                 no_of_special_requests = st.number_input("Special Requests", min_value=0, value=1)
+            with st.expander("Advanced Channel Context", expanded=False):
+                country = st.text_input("Country Code", value="Unknown")
+                agent = st.text_input("Agent / Agency Code", value="Unknown")
 
         with history_tab:
             col1, col2, col3 = st.columns(3)
@@ -1278,6 +1307,11 @@ def build_input_form() -> tuple[dict, bool]:
                 )
             with col3:
                 st.caption("History is used both by the model and by the operational review layer.")
+            detail_col1, detail_col2 = st.columns(2)
+            with detail_col1:
+                booking_changes = st.number_input("Booking Changes", min_value=0, value=0)
+            with detail_col2:
+                days_in_waiting_list = st.number_input("Waiting List Days", min_value=0, value=0)
 
         total_nights = no_of_weekend_nights + no_of_week_nights
         is_family = 1 if no_of_children > 0 else 0
@@ -1291,6 +1325,7 @@ def build_input_form() -> tuple[dict, bool]:
         submitted = st.form_submit_button("Predict Cancellation Risk", type="primary", use_container_width=True)
 
     booking = {
+        "hotel": hotel,
         "lead_time": lead_time,
         "arrival_month_name": arrival_month_name,
         "no_of_weekend_nights": no_of_weekend_nights,
@@ -1299,10 +1334,16 @@ def build_input_form() -> tuple[dict, bool]:
         "no_of_children": no_of_children,
         "type_of_meal_plan": type_of_meal_plan,
         "market_segment_type": market_segment_type,
+        "distribution_channel": distribution_channel,
+        "customer_type": customer_type,
+        "country": country.strip().upper() or "Unknown",
+        "agent": agent.strip() or "Unknown",
         "deposit_type": deposit_type,
         "repeated_guest": repeated_guest,
         "required_car_parking_space": required_car_parking_space,
         "avg_price_per_room": avg_price_per_room,
+        "booking_changes": booking_changes,
+        "days_in_waiting_list": days_in_waiting_list,
         "no_of_special_requests": no_of_special_requests,
         "no_of_previous_cancellations": no_of_previous_cancellations,
         "no_of_previous_bookings_not_canceled": no_of_previous_bookings_not_canceled,

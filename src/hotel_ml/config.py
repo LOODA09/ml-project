@@ -23,6 +23,10 @@ class ProjectConfig:
     clustering_k_min: int = 2
     clustering_k_max: int = 8
     low_cardinality_threshold: int = 10
+    rare_category_min_count: int = 10
+    rare_category_min_frequency_ratio: float = 0.003
+    target_encoder_min_samples_leaf: int = 20
+    target_encoder_smoothing: float = 10.0
     artifacts_dir: Path = ARTIFACTS_DIR
     processed_dir: Path = PROCESSED_DIR
     feature_columns_to_drop: list[str] = field(
@@ -33,6 +37,7 @@ class ProjectConfig:
     )
     selected_training_features: list[str] = field(
         default_factory=lambda: [
+            "hotel",
             "no_of_adults",
             "no_of_children",
             "lead_time",
@@ -41,6 +46,10 @@ class ProjectConfig:
             "no_of_week_nights",
             "type_of_meal_plan",
             "market_segment_type",
+            "distribution_channel",
+            "customer_type",
+            "country",
+            "agent",
             "deposit_type",
             "has_refundable_deposit",
             "has_non_refundable_deposit",
@@ -49,6 +58,8 @@ class ProjectConfig:
             "avg_price_per_room",
             "refundable_price_signal",
             "non_refundable_price_signal",
+            "booking_changes",
+            "days_in_waiting_list",
             "no_of_special_requests",
             "no_of_previous_bookings_not_canceled",
             "no_of_previous_cancellations",

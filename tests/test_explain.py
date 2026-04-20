@@ -1,5 +1,6 @@
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -150,3 +151,46 @@ def test_background_loader_falls_back_to_raw_dataset_when_snapshot_is_missing(tm
         "has_refundable_deposit",
         "historical_cancellation_ratio",
     ]
+
+
+def test_tree_explanation_returns_fast_summary_without_background(monkeypatch):
+    x_train = pd.DataFrame(
+        {
+            "lead_time": [8, 14, 22, 30, 36, 44, 60, 75],
+            "avg_price_per_room": [70.0, 82.0, 95.0, 120.0, 135.0, 160.0, 175.0, 190.0],
+            "deposit_type": ["No Deposit", "No Deposit", "Refundable", "Refundable", "Non Refund", "Non Refund", "Refundable", "Non Refund"],
+        }
+    )
+    y_train = [0, 0, 0, 0, 1, 1, 1, 1]
+
+    preprocess = ColumnTransformer(
+        transformers=[
+            ("num", StandardScaler(), ["lead_time", "avg_price_per_room"]),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), ["deposit_type"]),
+        ]
+    )
+    model = Pipeline(
+        steps=[
+            ("preprocess", preprocess),
+            ("model", RandomForestClassifier(n_estimators=20, random_state=42)),
+        ]
+    )
+    model.fit(x_train, y_train)
+
+    prepared_row = pd.DataFrame(
+        [
+            {
+                "lead_time": 40,
+                "avg_price_per_room": 140.0,
+                "deposit_type": "Refundable",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(explain, "_load_background_frame", lambda metadata: None)
+
+    summary = explain.explain_single_prediction(model, prepared_row, metadata={"feature_columns": list(prepared_row.columns)})
+
+    assert summary is not None
+    assert summary.method.startswith("Tree SHAP")
+    assert not summary.top_contributions.empty

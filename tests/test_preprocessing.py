@@ -1,5 +1,6 @@
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 from src.hotel_ml.preprocessing import build_training_pipeline, infer_feature_schema
 
@@ -70,6 +71,60 @@ def test_smotenc_pipeline_fits_mixed_type_booking_data() -> None:
     schema = infer_feature_schema(x)
     pipeline = build_training_pipeline(
         LogisticRegression(max_iter=200),
+        schema,
+    )
+    pipeline.fit(x, y)
+
+    probabilities = pipeline.predict_proba(x)
+    assert probabilities.shape == (len(x), 2)
+
+
+def test_infer_feature_schema_separates_high_cardinality_columns() -> None:
+    x = pd.DataFrame(
+        {
+            "lead_time": [5, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48],
+            "country": [f"C{i}" for i in range(12)],
+            "deposit_type": ["No Deposit", "Refundable"] * 6,
+        }
+    )
+
+    schema = infer_feature_schema(x)
+
+    assert "country" in schema.high_cardinality_columns
+    assert "deposit_type" in schema.low_cardinality_columns
+
+
+def test_tree_pipeline_handles_high_cardinality_categorical_features() -> None:
+    x = pd.DataFrame(
+        {
+            "lead_time": [5, 7, 9, 12, 14, 18, 21, 25, 45, 52, 60, 70, 85, 95, 105, 120],
+            "country": [f"C{i}" for i in range(16)],
+            "agent": [f"A{i}" for i in range(16)],
+            "deposit_type": [
+                "No Deposit",
+                "No Deposit",
+                "Refundable",
+                "No Deposit",
+                "Refundable",
+                "No Deposit",
+                "No Deposit",
+                "Refundable",
+                "Non Refund",
+                "Non Refund",
+                "Non Refund",
+                "Refundable",
+                "Non Refund",
+                "Refundable",
+                "Non Refund",
+                "Refundable",
+            ],
+        }
+    )
+    y = pd.Series([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1])
+
+    schema = infer_feature_schema(x)
+    pipeline = build_training_pipeline(
+        RandomForestClassifier(n_estimators=20, random_state=42),
         schema,
     )
     pipeline.fit(x, y)

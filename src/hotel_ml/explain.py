@@ -127,26 +127,46 @@ def _coerce_baseline_value(series: pd.Series, baseline_value):
     return baseline_value
 
 
-def _build_tree_summary(estimator, transformed_row: pd.DataFrame, transformed_background: pd.DataFrame) -> ShapSummary | None:
-    explainer = shap.TreeExplainer(
-        estimator,
-        data=transformed_background,
-        model_output="probability",
-        feature_perturbation="interventional",
-    )
-    shap_values = explainer(transformed_row)
+def _build_tree_summary(estimator, transformed_row: pd.DataFrame, transformed_background: pd.DataFrame | None = None) -> ShapSummary | None:
+    try:
+        explainer = shap.TreeExplainer(
+            estimator,
+            feature_perturbation="tree_path_dependent",
+        )
+        shap_values = explainer.shap_values(transformed_row, check_additivity=False)
+        base_values = explainer.expected_value
+        method = "Tree SHAP (Fast)"
+    except Exception:
+        if transformed_background is None:
+            raise
+        explainer = shap.TreeExplainer(
+            estimator,
+            data=transformed_background,
+            model_output="probability",
+            feature_perturbation="interventional",
+        )
+        shap_values = explainer.shap_values(transformed_row, check_additivity=False)
+        base_values = explainer.expected_value
+        method = "Tree SHAP"
 
-    values = shap_values.values
-    base_values = shap_values.base_values
-
-    if values.ndim == 3:
-        row_values = values[0, :, 1]
-        row_base = float(np.asarray(base_values)[0, 1])
+    if isinstance(shap_values, list):
+        row_values = np.asarray(shap_values[1])[0]
+        row_base = float(np.asarray(base_values)[1])
     else:
-        row_values = values[0]
-        row_base = float(np.asarray(base_values)[0])
+        values = np.asarray(shap_values)
+        if values.ndim == 3:
+            row_values = values[0, :, 1]
+        else:
+            row_values = values[0]
+        base_array = np.asarray(base_values)
+        if base_array.ndim == 0:
+            row_base = float(base_array)
+        elif len(base_array) > 1:
+            row_base = float(base_array[1])
+        else:
+            row_base = float(base_array[0])
 
-    return _finalize_summary(transformed_row, row_values, row_base, method="Tree SHAP")
+    return _finalize_summary(transformed_row, row_values, row_base, method=method)
 
 
 def _build_model_agnostic_summary(estimator, transformed_row: pd.DataFrame, transformed_background: pd.DataFrame) -> ShapSummary | None:
@@ -252,12 +272,12 @@ def explain_single_prediction(model, prepared_row: pd.DataFrame, metadata: dict)
         if not SHAP_AVAILABLE:
             return _build_local_effect_fallback(model, prepared_row, metadata)
         transformed_row = _transform_with_feature_names(model, prepared_row)
+        if _is_tree_model(estimator):
+            return _build_tree_summary(estimator, transformed_row, None)
         background_raw = _load_background_frame(metadata)
         if background_raw is None:
             return _build_local_effect_fallback(model, prepared_row, metadata)
         transformed_background = _transform_with_feature_names(model, background_raw)
-        if _is_tree_model(estimator):
-            return _build_tree_summary(estimator, transformed_row, transformed_background)
         return _build_model_agnostic_summary(estimator, transformed_row, transformed_background)
     except Exception:
         return _build_local_effect_fallback(model, prepared_row, metadata)

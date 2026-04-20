@@ -73,12 +73,12 @@ def fit_calibrated_pipeline(spec, schema, x: pd.DataFrame, y: pd.Series):
     return raw_pipeline, calibrated, calibration_info
 
 
-def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
+def bootstrap_deployment_artifacts(data_path: str | Path | None = None, force: bool = False) -> dict:
     ensure_directories()
 
     model_path = CONFIG.artifacts_dir / "best_cancellation_model.joblib"
     metadata_path = CONFIG.artifacts_dir / "training_metadata.json"
-    if model_path.exists() and metadata_path.exists():
+    if not force and model_path.exists() and metadata_path.exists():
         with open(metadata_path, "r", encoding="utf-8") as file:
             return json.load(file)
 
@@ -132,22 +132,9 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
     results_df = results_to_dataframe(evaluation_results)
     benchmark_leader_name = str(results_df.iloc[0]["model_name"])
     specs_by_name = {spec.name: spec for spec in model_specs}
-    deployment_preference = [
-        "Random Forest",
-        "Decision Tree",
-        "SVM",
-        "Logistic Regression",
-        "KNN",
-        "MLP",
-        "Naive Bayes",
-    ]
-    chosen_spec = None
-    for model_name in deployment_preference:
-        if model_name in specs_by_name:
-            chosen_spec = specs_by_name[model_name]
-            break
+    chosen_spec = specs_by_name.get(benchmark_leader_name)
     if chosen_spec is None:
-        raise RuntimeError("No deployment model available for bootstrap artifacts.")
+        raise RuntimeError(f"No deployment model available for bootstrap leader: {benchmark_leader_name}")
 
     deployed_pipeline = build_training_pipeline(chosen_spec.estimator, schema)
     deployed_pipeline.fit(x_bootstrap, y_bootstrap)
@@ -197,7 +184,7 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
         "segmentation_features": segmentation_features.columns.tolist(),
         "include_svm": True,
         "bootstrap_artifacts": True,
-        "deployment_model_strategy": "preferred_stable_tree_first",
+        "deployment_model_strategy": "composite_metric_leader",
     }
     with open(metadata_path, "w", encoding="utf-8") as file:
         json.dump(metadata, file, indent=2)

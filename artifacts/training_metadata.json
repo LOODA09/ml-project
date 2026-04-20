@@ -13,6 +13,7 @@
   "probability_calibration": {},
   "tensorflow_available": true,
   "feature_columns": [
+    "hotel",
     "no_of_adults",
     "no_of_children",
     "lead_time",
@@ -21,6 +22,10 @@
     "no_of_week_nights",
     "type_of_meal_plan",
     "market_segment_type",
+    "distribution_channel",
+    "customer_type",
+    "country",
+    "agent",
     "deposit_type",
     "has_refundable_deposit",
     "has_non_refundable_deposit",
@@ -29,6 +34,8 @@
     "avg_price_per_room",
     "refundable_price_signal",
     "non_refundable_price_signal",
+    "booking_changes",
+    "days_in_waiting_list",
     "no_of_special_requests",
     "no_of_previous_bookings_not_canceled",
     "no_of_previous_cancellations",
@@ -42,9 +49,14 @@
     "lead_time_bucket"
   ],
   "categorical_columns": [
+    "hotel",
     "arrival_month_name",
     "type_of_meal_plan",
     "market_segment_type",
+    "distribution_channel",
+    "customer_type",
+    "country",
+    "agent",
     "deposit_type",
     "room_type_reserved",
     "lead_time_bucket"
@@ -69,5 +81,5 @@
   ],
   "include_svm": true,
   "bootstrap_artifacts": true,
-  "deployment_model_strategy": "preferred_stable_tree_first"
+  "deployment_model_strategy": "composite_metric_leader"
 }
