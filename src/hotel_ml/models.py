@@ -195,4 +195,13 @@ def get_model_specs(include_svm: bool = False) -> list[ModelSpec]:
         ]
     )
 
+    if TENSORFLOW_AVAILABLE:
+        specs.append(
+            ModelSpec(
+                name="1D-CNN",
+                estimator=KerasCNNClassifier(epochs=20, batch_size=64, verbose=0),
+                complexity="High",
+            )
+        )
+
     return specs

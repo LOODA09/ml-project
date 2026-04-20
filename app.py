@@ -573,17 +573,18 @@ def render_hero() -> None:
                     </div>
                     <div>
                         <div class="hero-title">Hotel Cancellation Prediction</div>
-                        <div class="hero-sub">Professional reservation-risk intelligence with stronger pricing logic, animated decision feedback, and a disciplined 7-model benchmark set for decision support.</div>
+                        <div class="hero-sub">Professional reservation-risk intelligence with stronger pricing logic, animated decision feedback, and an 8-model full benchmark set with a cloud-safe deployment model.</div>
                     </div>
                 </div>
                 <div class="hero-sidecard">
                     <div class="hero-sidecard-label">Active Model Bench</div>
-                    <div class="hero-sidecard-value">7 Models • Hold-Out Tested</div>
+                    <div class="hero-sidecard-value">8 Models • Full Bench</div>
                 </div>
             </div>
             <div class="chip-row">
                 <div class="chip">Hold-out Testing</div>
-                <div class="chip">7 Approved Models</div>
+                <div class="chip">8 Full Models</div>
+                <div class="chip">Cloud RF Deploy</div>
                 <div class="chip">SMOTE-NC Training</div>
                 <div class="chip">Operational Review Layer</div>
                 <div class="chip">Animated Decision UI</div>
@@ -596,7 +597,7 @@ def render_hero() -> None:
 
 def render_plain_header() -> None:
     st.title("Hotel Reservation Intelligence")
-    st.caption("Cancellation scoring with the approved 7-model set, hotel-friendly business review, premium UI, and explainability.")
+    st.caption("Cancellation scoring with the full 8-model benchmark set, a stable cloud deployment model, premium UI, and explainability.")
 
 
 def render_section_note() -> None:
@@ -629,7 +630,7 @@ def render_workflow_strip() -> None:
             </div>
             <div class="pro-tile">
                 <div class="pro-kicker">Model Set</div>
-                <div class="pro-title">NB · LR · KNN · DT · RF · MLP · SVM</div>
+                <div class="pro-title">NB · LR · KNN · DT · RF · MLP · SVM · 1D-CNN</div>
             </div>
         </div>
         """,
@@ -639,8 +640,8 @@ def render_workflow_strip() -> None:
 
 def render_model_lineup_note() -> None:
     st.caption(
-        "Approved benchmark lineup: Naive Bayes, Logistic Regression, KNN, Decision Tree, Random Forest, MLP, and SVM. "
-        "XGBoost and 1D-CNN are not part of the active deployment set."
+        "Full benchmark lineup: Naive Bayes, Logistic Regression, KNN, Decision Tree, Random Forest, MLP, SVM, and 1D-CNN. "
+        "Cloud deployment currently uses Random Forest for stable SHAP and predictable runtime."
     )
 
 
@@ -1323,7 +1324,7 @@ def main() -> None:
     render_hero()
     render_section_note()
     render_workflow_strip()
-    st.caption("Booking cancellation prediction with SMOTE-NC balancing, hold-out testing, the approved 7-model benchmark set, and safer operational rules.")
+    st.caption("Booking cancellation prediction with SMOTE-NC balancing, hold-out testing, the full 8-model benchmark set, and a stable cloud deployment strategy.")
 
     best_model_path = CONFIG.artifacts_dir / "best_cancellation_model.joblib"
     comparison_path = CONFIG.artifacts_dir / "model_comparison.csv"
@@ -1498,6 +1499,8 @@ def main() -> None:
     if artifact_exists(comparison_path):
         st.subheader("Model Comparison")
         render_model_lineup_note()
+        if metadata.get("bootstrap_artifacts"):
+            st.caption("Cloud deployment uses a lightweight bootstrap benchmark table for speed. The full local training pipeline still supports the complete benchmark set, including 1D-CNN when TensorFlow is available.")
         comparison_df = pd.read_csv(comparison_path)
         st.dataframe(comparison_df, use_container_width=True)
         fig = px.bar(
