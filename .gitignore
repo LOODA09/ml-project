@@ -1,0 +1,9 @@
+.venv311/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+artifacts/
+data/processed/
+
+.streamlit/secrets.toml
