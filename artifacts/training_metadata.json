@@ -1,6 +1,7 @@
 {
   "target_column": "booking_status",
-  "best_model_name": "KNN",
+  "best_model_name": "Random Forest",
+  "benchmark_leader_name": "KNN",
   "prediction_model_artifact": "best_cancellation_model.joblib",
   "raw_model_artifact": "best_cancellation_model_raw.joblib",
   "smote_enabled": true,
@@ -67,5 +68,6 @@
     "no_of_special_requests"
   ],
   "include_svm": true,
-  "bootstrap_artifacts": true
+  "bootstrap_artifacts": true,
+  "deployment_model_strategy": "preferred_stable_tree_first"
 }

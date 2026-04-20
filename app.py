@@ -650,6 +650,7 @@ def render_result_cards(
     band: str,
     best_model_name: str,
     likely_outcome: str | None = None,
+    benchmark_leader_name: str | None = None,
 ) -> None:
     tone = "warn"
     if band == "High Risk":
@@ -678,14 +679,19 @@ def render_result_cards(
                 <div class="result-sub">Combines model score with booking-history safeguards.</div>
             </div>
             <div class="result-card neutral">
-                <div class="result-eyebrow">Best Model</div>
+                <div class="result-eyebrow">Deployment Model</div>
                 <div class="result-value">{best_model_name}</div>
-                <div class="result-sub">Champion model from the latest hold-out evaluation.</div>
+                <div class="result-sub">Current prediction model used by the app.</div>
             </div>
             <div class="result-card neutral">
                 <div class="result-eyebrow">Most Likely Outcome</div>
                 <div class="result-value">{likely_outcome or "Unknown"}</div>
                 <div class="result-sub">Best directional read even when the case stays in manual review.</div>
+            </div>
+            <div class="result-card neutral">
+                <div class="result-eyebrow">Bootstrap Leader</div>
+                <div class="result-value">{benchmark_leader_name or best_model_name}</div>
+                <div class="result-sub">Top ROC model inside the lightweight cloud benchmark table.</div>
             </div>
         </div>
         """,
@@ -741,6 +747,12 @@ def load_best_model_name(metadata: dict) -> str:
             pass
 
     return "Unknown"
+
+
+def load_benchmark_leader_name(metadata: dict) -> str:
+    if metadata.get("benchmark_leader_name"):
+        return str(metadata["benchmark_leader_name"])
+    return load_best_model_name(metadata)
 
 
 def load_cluster_assets():
@@ -1341,6 +1353,7 @@ def main() -> None:
         blockers = detect_unsupported_inputs(booking, reference_profile)
         prepared = align_to_model_schema(prepare_single_input(booking), model, metadata)
         best_model_name = load_best_model_name(metadata)
+        benchmark_leader_name = load_benchmark_leader_name(metadata)
 
         if blockers:
             st.session_state.prediction_state = {
@@ -1348,6 +1361,7 @@ def main() -> None:
                 "blockers": blockers,
                 "prepared": prepared,
                 "best_model_name": best_model_name,
+                "benchmark_leader_name": benchmark_leader_name,
                 "unsupported": True,
                 "raw_probability": None,
                 "raw_prediction": None,
@@ -1367,6 +1381,7 @@ def main() -> None:
                 "blockers": blockers,
                 "prepared": prepared,
                 "best_model_name": best_model_name,
+                "benchmark_leader_name": benchmark_leader_name,
                 "unsupported": False,
                 "raw_probability": raw_probability,
                 "raw_prediction": raw_prediction,
@@ -1383,6 +1398,7 @@ def main() -> None:
         blockers = prediction_state["blockers"]
         prepared = prediction_state["prepared"]
         best_model_name = prediction_state["best_model_name"]
+        benchmark_leader_name = prediction_state.get("benchmark_leader_name", best_model_name)
         final_label = prediction_state["final_label"]
         likely_outcome = prediction_state["likely_outcome"]
         band = prediction_state["business_decision_band"]
@@ -1393,6 +1409,7 @@ def main() -> None:
             band=band,
             best_model_name=best_model_name,
             likely_outcome=likely_outcome,
+            benchmark_leader_name=benchmark_leader_name,
         )
         render_outcome_reaction(final_label, likely_outcome, band)
 

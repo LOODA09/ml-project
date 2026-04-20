@@ -127,9 +127,24 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
         evaluation_results.append(result)
 
     results_df = results_to_dataframe(evaluation_results)
-    best_model_name = str(results_df.iloc[0]["model_name"])
+    benchmark_leader_name = str(results_df.iloc[0]["model_name"])
     specs_by_name = {spec.name: spec for spec in model_specs}
-    chosen_spec = specs_by_name[best_model_name]
+    deployment_preference = [
+        "Random Forest",
+        "Decision Tree",
+        "SVM",
+        "Logistic Regression",
+        "KNN",
+        "MLP",
+        "Naive Bayes",
+    ]
+    chosen_spec = None
+    for model_name in deployment_preference:
+        if model_name in specs_by_name:
+            chosen_spec = specs_by_name[model_name]
+            break
+    if chosen_spec is None:
+        raise RuntimeError("No deployment model available for bootstrap artifacts.")
 
     deployed_pipeline = build_training_pipeline(chosen_spec.estimator, schema)
     deployed_pipeline.fit(x_bootstrap, y_bootstrap)
@@ -152,7 +167,8 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
 
     metadata = {
         "target_column": CONFIG.target_column,
-        "best_model_name": best_model_name,
+        "best_model_name": chosen_spec.name,
+        "benchmark_leader_name": benchmark_leader_name,
         "prediction_model_artifact": "best_cancellation_model.joblib",
         "raw_model_artifact": "best_cancellation_model_raw.joblib",
         "smote_enabled": CONFIG.smote_enabled,
@@ -178,6 +194,7 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
         "segmentation_features": segmentation_features.columns.tolist(),
         "include_svm": True,
         "bootstrap_artifacts": True,
+        "deployment_model_strategy": "preferred_stable_tree_first",
     }
     with open(metadata_path, "w", encoding="utf-8") as file:
         json.dump(metadata, file, indent=2)
