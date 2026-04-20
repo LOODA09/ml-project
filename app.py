@@ -30,6 +30,7 @@ from src.hotel_ml.predict import (
     load_raw_model,
     prepare_single_input,
 )
+from src.hotel_ml.train import bootstrap_deployment_artifacts
 
 
 st.set_page_config(
@@ -1178,8 +1179,12 @@ def main() -> None:
     comparison_path = CONFIG.artifacts_dir / "model_comparison.csv"
 
     if not artifact_exists(best_model_path):
-        st.warning("No trained model found. Run `python -m src.hotel_ml.train --data data/raw/hotels.csv` first.")
-        st.stop()
+        with st.spinner("Preparing a lightweight deployment model from the bundled hotel dataset..."):
+            try:
+                bootstrap_deployment_artifacts("data/raw/hotels.csv")
+            except Exception as error:
+                st.warning(f"No trained model found, and bootstrap setup failed: {error}")
+                st.stop()
 
     model, raw_explainer_model, metadata = load_prediction_assets()
     reference_profile = load_reference_profile()

@@ -3,7 +3,14 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
-artifacts/
+artifacts/*
+!artifacts/best_cancellation_model.joblib
+!artifacts/best_cancellation_model_raw.joblib
+!artifacts/cluster_diagnostics.json
+!artifacts/cluster_profiles.csv
+!artifacts/guest_segmentation.joblib
+!artifacts/model_comparison.csv
+!artifacts/training_metadata.json
 data/processed/
 
 .streamlit/secrets.toml

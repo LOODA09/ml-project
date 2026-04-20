@@ -9,6 +9,7 @@ import joblib
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.frozen import FrozenEstimator
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
 from .clustering import find_best_kmeans, profile_clusters, save_cluster_artifacts
@@ -71,6 +72,99 @@ def fit_calibrated_pipeline(spec, schema, x: pd.DataFrame, y: pd.Series):
         "calibration_fraction": 0.15,
     }
     return raw_pipeline, calibrated, calibration_info
+
+
+def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
+    ensure_directories()
+
+    model_path = CONFIG.artifacts_dir / "best_cancellation_model.joblib"
+    metadata_path = CONFIG.artifacts_dir / "training_metadata.json"
+    if model_path.exists() and metadata_path.exists():
+        with open(metadata_path, "r", encoding="utf-8") as file:
+            return json.load(file)
+
+    resolved_data_path = data_path or (CONFIG.processed_dir.parent / "raw" / "hotels.csv")
+    df = load_dataset(resolved_data_path)
+    df = basic_cleaning(df)
+    df = add_engineered_features(df)
+
+    x, y = split_features_target(df)
+    x = select_model_features(x)
+    schema = infer_feature_schema(x)
+    x_train, x_test, y_train, y_test = train_test_split(
+        x,
+        y,
+        test_size=CONFIG.test_size,
+        random_state=CONFIG.random_state,
+        stratify=y,
+    )
+
+    estimator = LogisticRegression(
+        max_iter=1200,
+        class_weight="balanced",
+        random_state=CONFIG.random_state,
+    )
+    evaluation_pipeline = build_training_pipeline(estimator, schema)
+    result, _ = evaluate_model(
+        "Logistic Regression (Bootstrap)",
+        evaluation_pipeline,
+        x_train,
+        x_test,
+        y_train,
+        y_test,
+        "Low",
+    )
+
+    deployed_pipeline = build_training_pipeline(
+        LogisticRegression(
+            max_iter=1200,
+            class_weight="balanced",
+            random_state=CONFIG.random_state,
+        ),
+        schema,
+    )
+    deployed_pipeline.fit(x, y)
+
+    predictions = pd.Series(deployed_pipeline.predict(x_test), index=y_test.index)
+    confusion = build_confusion_payload(y_test, predictions)
+    results_df = results_to_dataframe([result])
+    results_df.to_csv(CONFIG.artifacts_dir / "model_comparison.csv", index=False)
+    joblib.dump(deployed_pipeline, CONFIG.artifacts_dir / "best_cancellation_model.joblib")
+    joblib.dump(deployed_pipeline, CONFIG.artifacts_dir / "best_cancellation_model_raw.joblib")
+
+    metadata = {
+        "target_column": CONFIG.target_column,
+        "best_model_name": "Logistic Regression (Bootstrap)",
+        "prediction_model_artifact": "best_cancellation_model.joblib",
+        "raw_model_artifact": "best_cancellation_model_raw.joblib",
+        "smote_enabled": CONFIG.smote_enabled,
+        "sampler": "SMOTENC" if CONFIG.smote_enabled else "None",
+        "smote_sampling_ratio": CONFIG.smote_sampling_ratio if CONFIG.smote_enabled else None,
+        "smote_k_neighbors": CONFIG.smote_k_neighbors if CONFIG.smote_enabled else None,
+        "calibrated_model_available": False,
+        "probability_strategy": "raw_predict_proba",
+        "probability_calibration": {},
+        "tensorflow_available": TENSORFLOW_AVAILABLE,
+        "feature_columns": x.columns.tolist(),
+        "categorical_columns": x.select_dtypes(
+            include=["object", "string", "category"]
+        ).columns.tolist(),
+        "cv_summary": {},
+        "testing_phase": {
+            "method": "holdout_test_split",
+            "test_size": CONFIG.test_size,
+            "train_rows": int(len(x_train)),
+            "test_rows": int(len(x_test)),
+            "best_model_confusion_matrix": confusion,
+        },
+        "segmentation_features": [],
+        "include_svm": False,
+        "bootstrap_artifacts": True,
+    }
+    with open(metadata_path, "w", encoding="utf-8") as file:
+        json.dump(metadata, file, indent=2)
+
+    return metadata
 
 
 def train_all(

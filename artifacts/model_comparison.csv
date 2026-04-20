@@ -1,0 +1,2 @@
+model_name,accuracy,precision,recall,f1_score,roc_auc,log_loss,brier_score,train_time_seconds,inference_time_ms_per_100,complexity
+Logistic Regression (Bootstrap),0.7829801490912137,0.7033870072182121,0.7161107970604862,0.7096918767507003,0.8550719451689044,0.43961111542130504,0.1464545959900154,46.50492300000042,31.95059997960925,Low
