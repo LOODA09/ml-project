@@ -1,6 +1,6 @@
 {
   "target_column": "booking_status",
-  "best_model_name": "Logistic Regression (Bootstrap)",
+  "best_model_name": "XGBoost (Bootstrap)",
   "prediction_model_artifact": "best_cancellation_model.joblib",
   "raw_model_artifact": "best_cancellation_model_raw.joblib",
   "smote_enabled": true,
@@ -55,18 +55,27 @@
     "train_rows": 95512,
     "test_rows": 23878,
     "best_model_confusion_matrix": {
-      "tn": 12351,
-      "fp": 2682,
-      "fn": 2488,
-      "tp": 6357,
+      "tn": 13825,
+      "fp": 1208,
+      "fn": 2975,
+      "tp": 5870,
       "total": 23878,
-      "accuracy": 0.7834827037440322,
-      "precision": 0.703285761699303,
-      "recall": 0.7187111362351611,
-      "specificity": 0.8215924965076831
+      "accuracy": 0.8248178239383533,
+      "precision": 0.8293303192992371,
+      "recall": 0.6636517806670436,
+      "specificity": 0.9196434510743032
     }
   },
-  "segmentation_features": [],
-  "include_svm": false,
+  "segmentation_features": [
+    "lead_time",
+    "avg_price_per_room",
+    "total_guests",
+    "total_nights",
+    "no_of_previous_cancellations",
+    "no_of_previous_bookings_not_canceled",
+    "required_car_parking_space",
+    "no_of_special_requests"
+  ],
+  "include_svm": true,
   "bootstrap_artifacts": true
 }

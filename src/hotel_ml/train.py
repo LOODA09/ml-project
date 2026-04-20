@@ -9,7 +9,6 @@ import joblib
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.frozen import FrozenEstimator
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
 from .clustering import find_best_kmeans, profile_clusters, save_cluster_artifacts
@@ -90,6 +89,7 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
 
     x, y = split_features_target(df)
     x = select_model_features(x)
+    segmentation_features = get_segmentation_features(df)
     schema = infer_feature_schema(x)
     x_train, x_test, y_train, y_test = train_test_split(
         x,
@@ -99,28 +99,30 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
         stratify=y,
     )
 
-    estimator = LogisticRegression(
-        max_iter=1200,
-        class_weight="balanced",
-        random_state=CONFIG.random_state,
-    )
-    evaluation_pipeline = build_training_pipeline(estimator, schema)
+    model_specs = get_model_specs(include_svm=True)
+    preferred_names = ["XGBoost", "Random Forest", "Decision Tree", "SVM", "MLP", "KNN", "Naive Bayes"]
+    specs_by_name = {spec.name: spec for spec in model_specs}
+    chosen_spec = None
+    for name in preferred_names:
+        if name in specs_by_name:
+            chosen_spec = specs_by_name[name]
+            break
+    if chosen_spec is None:
+        raise RuntimeError("No supported deployment model is available.")
+
+    evaluation_pipeline = build_training_pipeline(chosen_spec.estimator, schema)
     result, _ = evaluate_model(
-        "Logistic Regression (Bootstrap)",
+        f"{chosen_spec.name} (Bootstrap)",
         evaluation_pipeline,
         x_train,
         x_test,
         y_train,
         y_test,
-        "Low",
+        chosen_spec.complexity,
     )
 
     deployed_pipeline = build_training_pipeline(
-        LogisticRegression(
-            max_iter=1200,
-            class_weight="balanced",
-            random_state=CONFIG.random_state,
-        ),
+        chosen_spec.estimator,
         schema,
     )
     deployed_pipeline.fit(x, y)
@@ -134,7 +136,7 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
 
     metadata = {
         "target_column": CONFIG.target_column,
-        "best_model_name": "Logistic Regression (Bootstrap)",
+        "best_model_name": f"{chosen_spec.name} (Bootstrap)",
         "prediction_model_artifact": "best_cancellation_model.joblib",
         "raw_model_artifact": "best_cancellation_model_raw.joblib",
         "smote_enabled": CONFIG.smote_enabled,
@@ -157,8 +159,8 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
             "test_rows": int(len(x_test)),
             "best_model_confusion_matrix": confusion,
         },
-        "segmentation_features": [],
-        "include_svm": False,
+        "segmentation_features": segmentation_features.columns.tolist(),
+        "include_svm": True,
         "bootstrap_artifacts": True,
     }
     with open(metadata_path, "w", encoding="utf-8") as file:

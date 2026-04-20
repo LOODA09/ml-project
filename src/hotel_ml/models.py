@@ -6,7 +6,6 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import accuracy_score
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
@@ -134,15 +133,6 @@ def get_model_specs(include_svm: bool = False) -> list[ModelSpec]:
             complexity="Low",
         ),
         ModelSpec(
-            name="Logistic Regression",
-            estimator=LogisticRegression(
-                max_iter=1200,
-                class_weight="balanced",
-                random_state=CONFIG.random_state,
-            ),
-            complexity="Low",
-        ),
-        ModelSpec(
             name="KNN",
             estimator=KNeighborsClassifier(n_neighbors=11, weights="distance"),
             complexity="Medium",
@@ -212,32 +202,19 @@ def get_model_specs(include_svm: bool = False) -> list[ModelSpec]:
             ),
             complexity="High",
         ),
+        ModelSpec(
+            name="SVM",
+            estimator=SVC(
+                kernel="rbf",
+                C=2.0,
+                gamma="scale",
+                class_weight="balanced",
+                probability=True,
+                random_state=CONFIG.random_state,
+            ),
+            complexity="High",
+        ),
         ]
     )
-
-    if include_svm:
-        specs.append(
-            ModelSpec(
-                name="SVM",
-                estimator=SVC(
-                    kernel="rbf",
-                    C=2.0,
-                    gamma="scale",
-                    class_weight="balanced",
-                    probability=True,
-                    random_state=CONFIG.random_state,
-                ),
-                complexity="High",
-            )
-        )
-
-    if TENSORFLOW_AVAILABLE:
-        specs.append(
-            ModelSpec(
-                name="1D-CNN",
-                estimator=KerasCNNClassifier(epochs=20, batch_size=64, verbose=0),
-                complexity="High",
-            )
-        )
 
     return specs
