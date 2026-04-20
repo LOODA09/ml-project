@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.naive_bayes import GaussianNB
@@ -130,6 +131,15 @@ def get_model_specs(include_svm: bool = False) -> list[ModelSpec]:
         ModelSpec(
             name="Naive Bayes",
             estimator=GaussianNB(var_smoothing=1e-8),
+            complexity="Low",
+        ),
+        ModelSpec(
+            name="Logistic Regression",
+            estimator=LogisticRegression(
+                max_iter=1200,
+                class_weight="balanced",
+                random_state=CONFIG.random_state,
+            ),
             complexity="Low",
         ),
         ModelSpec(

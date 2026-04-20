@@ -117,22 +117,118 @@ def render_animated_theme() -> None:
             from { transform: translateX(-20%) rotate(11deg); }
             to { transform: translateX(65%) rotate(11deg); }
         }
+        .hero-topline {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .hero-brand {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .hero-logo {
+            position: relative;
+            width: 78px;
+            height: 78px;
+            border-radius: 24px;
+            background:
+                radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22), transparent 32%),
+                linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+            border: 1px solid rgba(255,255,255,0.22);
+            backdrop-filter: blur(8px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 14px 30px rgba(0,0,0,0.22);
+            overflow: hidden;
+        }
+        .logo-hotel {
+            position: absolute;
+            left: 17px;
+            top: 15px;
+            width: 24px;
+            height: 34px;
+            border-radius: 6px 6px 2px 2px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(225,238,255,0.88));
+        }
+        .logo-hotel::before {
+            content: "";
+            position: absolute;
+            left: 6px;
+            top: 6px;
+            width: 4px;
+            height: 4px;
+            background: #0d5396;
+            box-shadow:
+                8px 0 0 #0d5396,
+                0 8px 0 #0d5396,
+                8px 8px 0 #0d5396,
+                0 16px 0 #0d5396,
+                8px 16px 0 #0d5396;
+        }
+        .logo-chart {
+            position: absolute;
+            right: 10px;
+            bottom: 12px;
+            width: 38px;
+            height: 26px;
+        }
+        .logo-chart span {
+            position: absolute;
+            bottom: 0;
+            width: 6px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #6ee7ff, #19c2c9);
+            animation: chartPulse 1.8s ease-in-out infinite;
+        }
+        .logo-chart span:nth-child(1) { left: 0; height: 10px; animation-delay: 0.0s; }
+        .logo-chart span:nth-child(2) { left: 10px; height: 16px; animation-delay: 0.18s; }
+        .logo-chart span:nth-child(3) { left: 20px; height: 24px; animation-delay: 0.36s; }
+        .logo-chart span:nth-child(4) { left: 30px; height: 18px; animation-delay: 0.54s; }
+        .logo-ring {
+            position: absolute;
+            inset: 10px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.16);
+            animation: ringSpin 10s linear infinite;
+        }
+        .hero-sidecard {
+            min-width: 220px;
+            padding: 0.85rem 0.95rem;
+            border-radius: 18px;
+            background: rgba(7, 20, 38, 0.34);
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+        .hero-sidecard-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255,255,255,0.74);
+        }
+        .hero-sidecard-value {
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 1.08rem;
+            margin-top: 0.3rem;
+            color: #fff;
+        }
         .hero-title {
             font-family: "Space Grotesk", sans-serif;
-            font-size: 1.45rem;
+            font-size: 1.58rem;
             font-weight: 700;
             margin-bottom: 0.25rem;
             letter-spacing: 0.2px;
         }
         .hero-sub {
-            font-size: 0.95rem;
-            opacity: 0.95;
+            font-size: 0.96rem;
+            opacity: 0.94;
+            max-width: 760px;
         }
         .chip-row {
             display: flex;
             gap: 0.45rem;
             flex-wrap: wrap;
-            margin-top: 0.65rem;
+            margin-top: 0.8rem;
         }
         .chip {
             font-size: 0.78rem;
@@ -427,6 +523,14 @@ def render_animated_theme() -> None:
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes chartPulse {
+            0%, 100% { transform: scaleY(1); opacity: 0.92; }
+            50% { transform: scaleY(1.18); opacity: 1; }
+        }
+        @keyframes ringSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
         @keyframes emojiBounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-8px) scale(1.04); }
@@ -445,6 +549,8 @@ def render_animated_theme() -> None:
             .hero { padding: 1.1rem 0.95rem; }
             .hero-title { font-size: 1.2rem; }
             .pro-strip { grid-template-columns: 1fr; }
+            .hero-logo { width: 66px; height: 66px; }
+            .hero-sidecard { width: 100%; min-width: unset; }
         }
         </style>
         """,
@@ -456,13 +562,31 @@ def render_hero() -> None:
     st.markdown(
         """
         <div class="hero">
-            <div class="hero-title">Hotel Reservation Intelligence</div>
-            <div class="hero-sub">Real-time cancellation risk + business-safe manual review for edge-case booking history.</div>
+            <div class="hero-topline">
+                <div class="hero-brand">
+                    <div class="hero-logo">
+                        <div class="logo-ring"></div>
+                        <div class="logo-hotel"></div>
+                        <div class="logo-chart">
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="hero-title">Hotel Cancellation Prediction</div>
+                        <div class="hero-sub">Professional reservation-risk intelligence with stronger pricing logic, animated decision feedback, and a disciplined 8-model benchmark set for decision support.</div>
+                    </div>
+                </div>
+                <div class="hero-sidecard">
+                    <div class="hero-sidecard-label">Active Model Bench</div>
+                    <div class="hero-sidecard-value">8 Models • Hold-Out Tested</div>
+                </div>
+            </div>
             <div class="chip-row">
                 <div class="chip">Hold-out Testing</div>
-                <div class="chip">5-Fold CV (Optional)</div>
+                <div class="chip">8 Approved Models</div>
                 <div class="chip">SMOTE-NC Training</div>
                 <div class="chip">Operational Review Layer</div>
+                <div class="chip">Animated Decision UI</div>
             </div>
         </div>
         """,
@@ -472,7 +596,7 @@ def render_hero() -> None:
 
 def render_plain_header() -> None:
     st.title("Hotel Reservation Intelligence")
-    st.caption("Calibrated cancellation scoring with hotel-friendly business review and explainability.")
+    st.caption("Cancellation scoring with the approved 8-model set, hotel-friendly business review, premium UI, and explainability.")
 
 
 def render_section_note() -> None:
@@ -503,9 +627,20 @@ def render_workflow_strip() -> None:
                 <div class="pro-kicker">Validation</div>
                 <div class="pro-title">Hold-Out Performance</div>
             </div>
+            <div class="pro-tile">
+                <div class="pro-kicker">Model Set</div>
+                <div class="pro-title">NB · LR · KNN · DT · RF · XGB · MLP · SVM</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def render_model_lineup_note() -> None:
+    st.caption(
+        "Approved benchmark lineup: Naive Bayes, Logistic Regression, KNN, Decision Tree, Random Forest, XGBoost, MLP, and SVM. "
+        "1D-CNN is not part of the active deployment set."
     )
 
 
@@ -1173,7 +1308,7 @@ def main() -> None:
     render_hero()
     render_section_note()
     render_workflow_strip()
-    st.caption("Booking cancellation prediction with SMOTE-NC balancing, calibrated probabilities, hold-out testing, and safer operational rules.")
+    st.caption("Booking cancellation prediction with SMOTE-NC balancing, hold-out testing, the approved 8-model benchmark set, and safer operational rules.")
 
     best_model_path = CONFIG.artifacts_dir / "best_cancellation_model.joblib"
     comparison_path = CONFIG.artifacts_dir / "model_comparison.csv"
@@ -1331,6 +1466,7 @@ def main() -> None:
 
     if artifact_exists(comparison_path):
         st.subheader("Model Comparison")
+        render_model_lineup_note()
         comparison_df = pd.read_csv(comparison_path)
         st.dataframe(comparison_df, use_container_width=True)
         fig = px.bar(
