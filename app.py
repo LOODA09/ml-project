@@ -1278,7 +1278,7 @@ def render_shap_section(model, prepared_row: pd.DataFrame) -> None:
 
     st.caption(
         "Prediction uses only the current booking values and the saved trained model. "
-        "SHAP is computed from the matching raw tree model, while a fixed training sample is used only as the background reference for attribution."
+        "Tree models use tree SHAP, while models such as KNN, SVM, and Logistic Regression use a model-agnostic SHAP fallback with a small training background sample."
     )
 
     contribution_df = shap_summary.top_contributions.copy()
@@ -1447,10 +1447,8 @@ def main() -> None:
             with drivers_tab:
                 render_rationale_panel(booking, final_probability)
                 render_price_sensitivity(booking, model, metadata)
-                show_shap = st.toggle("Load SHAP explanation", value=False, help="Disabled by default to keep the page responsive.")
-                if show_shap:
-                    raw_prepared = align_to_model_schema(prepare_single_input(booking), raw_explainer_model, metadata)
-                    render_shap_section(raw_explainer_model, raw_prepared)
+                raw_prepared = align_to_model_schema(prepare_single_input(booking), raw_explainer_model, metadata)
+                render_shap_section(raw_explainer_model, raw_prepared)
 
                 if artifact_exists(CONFIG.artifacts_dir / "guest_segmentation.joblib"):
                     cluster_model, cluster_profiles, diagnostics = load_cached_cluster_assets()
