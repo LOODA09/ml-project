@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,8 @@ except Exception:
     SHAP_AVAILABLE = False
 
 from .config import CONFIG
+from .data import basic_cleaning, load_dataset, resolve_dataset_path, select_model_features
+from .features import add_engineered_features
 
 
 TREE_MODEL_CLASSNAMES = {
@@ -46,17 +49,52 @@ def _transform_with_feature_names(model, x: pd.DataFrame) -> pd.DataFrame:
 
 def _load_background_frame(metadata: dict) -> pd.DataFrame | None:
     path = CONFIG.artifacts_dir / "training_input_snapshot.csv"
-    if not path.exists():
+    df = _read_background_source(path)
+    if df is None:
+        for filename in CONFIG.raw_dataset_candidates:
+            candidate = resolve_dataset_path(Path("data") / "raw" / filename)
+            df = _read_background_source(candidate)
+            if df is not None:
+                df = basic_cleaning(df)
+                df = add_engineered_features(df)
+                df = select_model_features(df)
+                break
+
+    if df is None:
         return None
 
-    df = pd.read_csv(path)
     feature_columns = metadata.get("feature_columns", [])
+    categorical_columns = set(metadata.get("categorical_columns", []))
     if feature_columns:
+        for column in feature_columns:
+            if column not in df.columns:
+                df[column] = "Unknown" if column in categorical_columns else 0
         df = df.reindex(columns=feature_columns)
 
     if len(df) > 200:
         df = df.sample(n=200, random_state=CONFIG.random_state)
     return df
+
+
+def _read_background_source(path: Path) -> pd.DataFrame | None:
+    if not path.exists():
+        return None
+
+    try:
+        return load_dataset(path)
+    except Exception:
+        return None
+
+
+def _build_default_background(prepared_row: pd.DataFrame) -> pd.DataFrame:
+    default_row = prepared_row.copy()
+    for column in default_row.columns:
+        series = default_row[column]
+        if pd.api.types.is_numeric_dtype(series):
+            default_row.at[default_row.index[0], column] = 0
+        else:
+            default_row.at[default_row.index[0], column] = "Unknown"
+    return default_row
 
 
 def _coerce_baseline_value(series: pd.Series, baseline_value):
@@ -143,7 +181,7 @@ def _build_model_agnostic_summary(estimator, transformed_row: pd.DataFrame, tran
 def _build_local_effect_fallback(model, prepared_row: pd.DataFrame, metadata: dict) -> ShapSummary | None:
     background_raw = _load_background_frame(metadata)
     if background_raw is None:
-        return None
+        background_raw = _build_default_background(prepared_row)
 
     base_probability = float(model.predict_proba(prepared_row)[0, 1])
     contributions: list[dict] = []

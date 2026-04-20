@@ -1159,6 +1159,7 @@ def render_model_comparison_summary(comparison_df: pd.DataFrame) -> None:
     if comparison_df.empty:
         return
 
+    st.caption("Champion selection uses a balanced composite score across discrimination, classification quality, calibration loss, and runtime. The best ROC-AUC model can differ from the deployed champion.")
     composite_leader = comparison_df.iloc[0]
     best_roc = comparison_df.sort_values("roc_auc", ascending=False).iloc[0]
     best_f1 = comparison_df.sort_values("f1_score", ascending=False).iloc[0]
@@ -1557,6 +1558,9 @@ def main() -> None:
         if metadata.get("bootstrap_artifacts"):
             st.caption("Cloud deployment uses a lightweight bootstrap benchmark table for speed. The full local training pipeline still supports the complete benchmark set, including 1D-CNN when TensorFlow is available.")
         comparison_df = pd.read_csv(comparison_path)
+        sort_columns = [column for column in ["composite_score", "roc_auc", "f1_score", "accuracy"] if column in comparison_df.columns]
+        if sort_columns:
+            comparison_df = comparison_df.sort_values(sort_columns, ascending=False).reset_index(drop=True)
         render_model_comparison_summary(comparison_df)
         st.dataframe(comparison_df, use_container_width=True)
         fig = px.bar(

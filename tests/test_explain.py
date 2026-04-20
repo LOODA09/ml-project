@@ -93,3 +93,60 @@ def test_local_effect_fallback_handles_integer_columns_without_dtype_errors(monk
     assert summary is not None
     assert summary.method == "Local Effect Fallback"
     assert "no_of_previous_cancellations" in summary.top_contributions["feature"].values
+
+
+def test_background_loader_falls_back_to_raw_dataset_when_snapshot_is_missing(tmp_path, monkeypatch):
+    raw_dir = tmp_path / "raw"
+    processed_dir = tmp_path / "processed"
+    artifacts_dir = tmp_path / "artifacts"
+    raw_dir.mkdir()
+    processed_dir.mkdir()
+    artifacts_dir.mkdir()
+
+    pd.DataFrame(
+        {
+            "booking_status": ["Canceled", "Not_Canceled"],
+            "adults": [2, 1],
+            "children": [0, 1],
+            "lead_time": [25, 5],
+            "arrival_date_month": ["July", "August"],
+            "stays_in_weekend_nights": [1, 0],
+            "stays_in_week_nights": [2, 3],
+            "meal": ["Meal Plan 1", "Meal Plan 2"],
+            "market_segment": ["Online", "Offline"],
+            "deposit_type": ["Refundable", "No Deposit"],
+            "is_repeated_guest": [0, 1],
+            "required_car_parking_spaces": [0, 1],
+            "adr": [120.0, 90.0],
+            "total_of_special_requests": [1, 2],
+            "previous_bookings_not_canceled": [0, 3],
+            "previous_cancellations": [2, 0],
+            "reserved_room_type": ["Room_Type 1", "Room_Type 2"],
+        }
+    ).to_csv(raw_dir / "hotels.csv", index=False)
+
+    monkeypatch.setattr(explain.CONFIG, "artifacts_dir", artifacts_dir, raising=False)
+    monkeypatch.setattr(explain.CONFIG, "processed_dir", processed_dir, raising=False)
+
+    background = explain._load_background_frame(
+        metadata={
+            "feature_columns": [
+                "lead_time",
+                "deposit_type",
+                "avg_price_per_room",
+                "has_refundable_deposit",
+                "historical_cancellation_ratio",
+            ],
+            "categorical_columns": ["deposit_type"],
+        }
+    )
+
+    assert background is not None
+    assert not background.empty
+    assert list(background.columns) == [
+        "lead_time",
+        "deposit_type",
+        "avg_price_per_room",
+        "has_refundable_deposit",
+        "historical_cancellation_ratio",
+    ]
