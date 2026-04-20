@@ -18,8 +18,9 @@ TREE_MODEL_CLASSNAMES = {
 
 @dataclass
 class ShapSummary:
-    explanation: shap.Explanation
+    explanation: shap.Explanation | None
     top_contributions: pd.DataFrame
+    method: str
 
 
 def _is_tree_model(estimator) -> bool:
@@ -70,7 +71,7 @@ def _build_tree_summary(estimator, transformed_row: pd.DataFrame, transformed_ba
         row_values = values[0]
         row_base = float(np.asarray(base_values)[0])
 
-    return _finalize_summary(transformed_row, row_values, row_base)
+    return _finalize_summary(transformed_row, row_values, row_base, method="Tree SHAP")
 
 
 def _build_model_agnostic_summary(estimator, transformed_row: pd.DataFrame, transformed_background: pd.DataFrame) -> ShapSummary | None:
@@ -99,10 +100,47 @@ def _build_model_agnostic_summary(estimator, transformed_row: pd.DataFrame, tran
         expected = np.asarray(explainer.expected_value)
         expected_value = expected[1] if expected.ndim > 0 and len(expected) > 1 else expected.item()
 
-    return _finalize_summary(transformed_row, row_values, float(expected_value))
+    return _finalize_summary(transformed_row, row_values, float(expected_value), method="Kernel SHAP")
 
 
-def _finalize_summary(transformed_row: pd.DataFrame, row_values: np.ndarray, row_base: float) -> ShapSummary:
+def _build_local_effect_fallback(model, prepared_row: pd.DataFrame, metadata: dict) -> ShapSummary | None:
+    background_raw = _load_background_frame(metadata)
+    if background_raw is None:
+        return None
+
+    base_probability = float(model.predict_proba(prepared_row)[0, 1])
+    contributions: list[dict] = []
+    for column in prepared_row.columns:
+        candidate = prepared_row.copy()
+        series = background_raw[column].dropna() if column in background_raw.columns else pd.Series(dtype=float)
+        if series.empty:
+            baseline_value = prepared_row.iloc[0][column]
+        elif pd.api.types.is_numeric_dtype(series):
+            baseline_value = float(series.median())
+        else:
+            mode = series.astype(str).mode(dropna=True)
+            baseline_value = str(mode.iloc[0]) if not mode.empty else str(prepared_row.iloc[0][column])
+        candidate.at[candidate.index[0], column] = baseline_value
+        fallback_probability = float(model.predict_proba(candidate)[0, 1])
+        contributions.append(
+            {
+                "feature": column,
+                "feature_value": prepared_row.iloc[0][column],
+                "shap_value": base_probability - fallback_probability,
+            }
+        )
+
+    contribution_df = pd.DataFrame(contributions)
+    contribution_df["abs_shap_value"] = contribution_df["shap_value"].abs()
+    contribution_df = contribution_df.sort_values("abs_shap_value", ascending=False).head(12)
+    return ShapSummary(
+        explanation=None,
+        top_contributions=contribution_df,
+        method="Local Effect Fallback",
+    )
+
+
+def _finalize_summary(transformed_row: pd.DataFrame, row_values: np.ndarray, row_base: float, method: str) -> ShapSummary:
     explanation = shap.Explanation(
         values=row_values,
         base_values=row_base,
@@ -125,6 +163,7 @@ def _finalize_summary(transformed_row: pd.DataFrame, row_values: np.ndarray, row
     return ShapSummary(
         explanation=explanation,
         top_contributions=contributions,
+        method=method,
     )
 
 
@@ -134,13 +173,15 @@ def explain_single_prediction(model, prepared_row: pd.DataFrame, metadata: dict)
         return None
 
     try:
+        if not SHAP_AVAILABLE:
+            return _build_local_effect_fallback(model, prepared_row, metadata)
         transformed_row = _transform_with_feature_names(model, prepared_row)
         background_raw = _load_background_frame(metadata)
         if background_raw is None:
-            return None
+            return _build_local_effect_fallback(model, prepared_row, metadata)
         transformed_background = _transform_with_feature_names(model, background_raw)
         if _is_tree_model(estimator):
             return _build_tree_summary(estimator, transformed_row, transformed_background)
         return _build_model_agnostic_summary(estimator, transformed_row, transformed_background)
     except Exception:
-        return None
+        return _build_local_effect_fallback(model, prepared_row, metadata)

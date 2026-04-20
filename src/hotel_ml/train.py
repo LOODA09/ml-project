@@ -111,10 +111,10 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
         stratify=y_bootstrap,
     )
 
-    model_specs = [
-        spec for spec in get_model_specs(include_svm=True)
-        if spec.name != "1D-CNN"
-    ]
+    model_specs = get_model_specs(include_svm=True)
+    for spec in model_specs:
+        if spec.name == "1D-CNN" and hasattr(spec.estimator, "epochs"):
+            spec.estimator.epochs = min(int(spec.estimator.epochs), 8)
     evaluation_results = []
     for spec in model_specs:
         evaluation_pipeline = build_training_pipeline(spec.estimator, schema)

@@ -1155,6 +1155,22 @@ def render_confusion_matrix(metadata: dict) -> None:
     col4.metric("Specificity", f'{matrix["specificity"]:.2%}')
 
 
+def render_model_comparison_summary(comparison_df: pd.DataFrame) -> None:
+    if comparison_df.empty:
+        return
+
+    composite_leader = comparison_df.iloc[0]
+    best_roc = comparison_df.sort_values("roc_auc", ascending=False).iloc[0]
+    best_f1 = comparison_df.sort_values("f1_score", ascending=False).iloc[0]
+    best_accuracy = comparison_df.sort_values("accuracy", ascending=False).iloc[0]
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Composite Leader", str(composite_leader["model_name"]))
+    col2.metric("Best ROC-AUC", f'{best_roc["model_name"]} ({best_roc["roc_auc"]:.3f})')
+    col3.metric("Best F1", f'{best_f1["model_name"]} ({best_f1["f1_score"]:.3f})')
+    col4.metric("Best Accuracy", f'{best_accuracy["model_name"]} ({best_accuracy["accuracy"]:.3f})')
+
+
 def build_input_form() -> tuple[dict, bool]:
     st.subheader("Booking Intake")
     meal_options = load_unique_options(
@@ -1279,19 +1295,15 @@ def build_input_form() -> tuple[dict, bool]:
 
 def render_shap_section(model, prepared_row: pd.DataFrame) -> None:
     st.subheader("Explainability")
-    if not SHAP_AVAILABLE:
-        st.info("Install `shap` to display feature explanations.")
-        return
-
     metadata = load_metadata()
     shap_summary = explain_single_prediction(model, prepared_row, metadata)
     if shap_summary is None:
-        st.info("SHAP explanation is not available for the current best model.")
+        st.info("Feature explanation is not available for the current deployed model.")
         return
 
     st.caption(
-        "Prediction uses only the current booking values and the saved trained model. "
-        "Tree models use tree SHAP, while models such as KNN, SVM, and Logistic Regression use a model-agnostic SHAP fallback with a small training background sample."
+        f"Prediction uses only the current booking values and the saved trained model. "
+        f"Explanation method: {shap_summary.method}."
     )
 
     contribution_df = shap_summary.top_contributions.copy()
@@ -1502,6 +1514,7 @@ def main() -> None:
         if metadata.get("bootstrap_artifacts"):
             st.caption("Cloud deployment uses a lightweight bootstrap benchmark table for speed. The full local training pipeline still supports the complete benchmark set, including 1D-CNN when TensorFlow is available.")
         comparison_df = pd.read_csv(comparison_path)
+        render_model_comparison_summary(comparison_df)
         st.dataframe(comparison_df, use_container_width=True)
         fig = px.bar(
             comparison_df,
