@@ -111,7 +111,37 @@ def results_to_dataframe(results: list[EvaluationResult]) -> pd.DataFrame:
         }
         for result in results
     ]
-    return pd.DataFrame(data).sort_values(by="roc_auc", ascending=False).reset_index(drop=True)
+    df = pd.DataFrame(data)
+
+    scoring_plan = {
+        "accuracy": (0.14, True),
+        "precision": (0.10, True),
+        "recall": (0.10, True),
+        "f1_score": (0.22, True),
+        "roc_auc": (0.24, True),
+        "log_loss": (0.08, False),
+        "brier_score": (0.07, False),
+        "train_time_seconds": (0.02, False),
+        "inference_time_ms_per_100": (0.03, False),
+    }
+
+    composite_score = pd.Series(0.0, index=df.index, dtype=float)
+    for column, (weight, higher_is_better) in scoring_plan.items():
+        series = df[column].astype(float)
+        span = float(series.max() - series.min())
+        if span == 0:
+            normalized = pd.Series(1.0, index=df.index, dtype=float)
+        else:
+            normalized = (series - series.min()) / span
+            if not higher_is_better:
+                normalized = 1.0 - normalized
+        composite_score += normalized * weight
+
+    df["composite_score"] = composite_score.round(6)
+    return df.sort_values(
+        by=["composite_score", "roc_auc", "f1_score", "accuracy"],
+        ascending=[False, False, False, False],
+    ).reset_index(drop=True)
 
 
 def build_confusion_payload(y_true: pd.Series, y_pred: pd.Series) -> dict[str, float | int]:
