@@ -127,8 +127,6 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
     )
     deployed_pipeline.fit(x, y)
 
-    predictions = pd.Series(deployed_pipeline.predict(x_test), index=y_test.index)
-    confusion = build_confusion_payload(y_test, predictions)
     results_df = results_to_dataframe([result])
     results_df.to_csv(CONFIG.artifacts_dir / "model_comparison.csv", index=False)
     joblib.dump(deployed_pipeline, CONFIG.artifacts_dir / "best_cancellation_model.joblib")
@@ -157,7 +155,6 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
             "test_size": CONFIG.test_size,
             "train_rows": int(len(x_train)),
             "test_rows": int(len(x_test)),
-            "best_model_confusion_matrix": confusion,
         },
         "segmentation_features": segmentation_features.columns.tolist(),
         "include_svm": True,

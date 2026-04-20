@@ -813,36 +813,39 @@ def load_holdout_confusion_matrix() -> dict:
     if saved_matrix:
         return saved_matrix
 
-    df = add_engineered_features(basic_cleaning(load_dataset("data/raw/hotels.csv")))
-    x, y = split_features_target(df)
-    x = select_model_features(x)
-    _, x_test, _, y_test = train_test_split(
-        x,
-        y,
-        test_size=CONFIG.test_size,
-        random_state=CONFIG.random_state,
-        stratify=y,
-    )
-    model = load_best_model()
-    prepared = align_to_model_schema(x_test, model, metadata)
-    predictions = pd.Series(model.predict(prepared), index=y_test.index)
+    try:
+        df = add_engineered_features(basic_cleaning(load_dataset("data/raw/hotels.csv")))
+        x, y = split_features_target(df)
+        x = select_model_features(x)
+        _, x_test, _, y_test = train_test_split(
+            x,
+            y,
+            test_size=CONFIG.test_size,
+            random_state=CONFIG.random_state,
+            stratify=y,
+        )
+        model = load_best_model()
+        prepared = align_to_model_schema(x_test, model, metadata)
+        predictions = pd.Series(model.predict(prepared), index=y_test.index)
 
-    tn = int(((predictions == 0) & (y_test == 0)).sum())
-    fp = int(((predictions == 1) & (y_test == 0)).sum())
-    fn = int(((predictions == 0) & (y_test == 1)).sum())
-    tp = int(((predictions == 1) & (y_test == 1)).sum())
-    total = tn + fp + fn + tp
-    return {
-        "tn": tn,
-        "fp": fp,
-        "fn": fn,
-        "tp": tp,
-        "total": total,
-        "accuracy": (tp + tn) / total if total else 0.0,
-        "precision": tp / (tp + fp) if (tp + fp) else 0.0,
-        "recall": tp / (tp + fn) if (tp + fn) else 0.0,
-        "specificity": tn / (tn + fp) if (tn + fp) else 0.0,
-    }
+        tn = int(((predictions == 0) & (y_test == 0)).sum())
+        fp = int(((predictions == 1) & (y_test == 0)).sum())
+        fn = int(((predictions == 0) & (y_test == 1)).sum())
+        tp = int(((predictions == 1) & (y_test == 1)).sum())
+        total = tn + fp + fn + tp
+        return {
+            "tn": tn,
+            "fp": fp,
+            "fn": fn,
+            "tp": tp,
+            "total": total,
+            "accuracy": (tp + tn) / total if total else 0.0,
+            "precision": tp / (tp + fp) if (tp + fp) else 0.0,
+            "recall": tp / (tp + fn) if (tp + fn) else 0.0,
+            "specificity": tn / (tn + fp) if (tn + fp) else 0.0,
+        }
+    except Exception:
+        return {}
 
 
 def validate_booking_inputs(booking: dict, profile: dict) -> list[str]:
