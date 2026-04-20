@@ -4,7 +4,14 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-import shap
+
+try:
+    import shap
+
+    SHAP_AVAILABLE = True
+except Exception:
+    shap = None
+    SHAP_AVAILABLE = False
 
 from .config import CONFIG
 
@@ -50,6 +57,36 @@ def _load_background_frame(metadata: dict) -> pd.DataFrame | None:
     if len(df) > 200:
         df = df.sample(n=200, random_state=CONFIG.random_state)
     return df
+
+
+def _coerce_baseline_value(series: pd.Series, baseline_value):
+    if pd.api.types.is_bool_dtype(series):
+        return bool(baseline_value)
+
+    if pd.api.types.is_integer_dtype(series):
+        try:
+            return int(round(float(baseline_value)))
+        except Exception:
+            return int(round(float(series.median())))
+
+    if pd.api.types.is_float_dtype(series):
+        try:
+            return float(baseline_value)
+        except Exception:
+            return float(series.median())
+
+    if pd.api.types.is_numeric_dtype(series):
+        median_value = float(series.median())
+        return median_value
+
+    if isinstance(series.dtype, pd.CategoricalDtype):
+        categories = series.cat.categories
+        if baseline_value in categories:
+            return baseline_value
+        if len(categories) > 0:
+            return categories[0]
+
+    return baseline_value
 
 
 def _build_tree_summary(estimator, transformed_row: pd.DataFrame, transformed_background: pd.DataFrame) -> ShapSummary | None:
@@ -112,14 +149,15 @@ def _build_local_effect_fallback(model, prepared_row: pd.DataFrame, metadata: di
     contributions: list[dict] = []
     for column in prepared_row.columns:
         candidate = prepared_row.copy()
-        series = background_raw[column].dropna() if column in background_raw.columns else pd.Series(dtype=float)
+        series = background_raw[column].dropna() if column in background_raw.columns else pd.Series(dtype=prepared_row[column].dtype)
         if series.empty:
             baseline_value = prepared_row.iloc[0][column]
         elif pd.api.types.is_numeric_dtype(series):
-            baseline_value = float(series.median())
+            baseline_value = series.median()
         else:
             mode = series.astype(str).mode(dropna=True)
-            baseline_value = str(mode.iloc[0]) if not mode.empty else str(prepared_row.iloc[0][column])
+            baseline_value = mode.iloc[0] if not mode.empty else prepared_row.iloc[0][column]
+        baseline_value = _coerce_baseline_value(candidate[column], baseline_value)
         candidate.at[candidate.index[0], column] = baseline_value
         fallback_probability = float(model.predict_proba(candidate)[0, 1])
         contributions.append(

@@ -1171,6 +1171,23 @@ def render_model_comparison_summary(comparison_df: pd.DataFrame) -> None:
     col4.metric("Best Accuracy", f'{best_accuracy["model_name"]} ({best_accuracy["accuracy"]:.3f})')
 
 
+def prettify_feature_label(feature_name: str) -> str:
+    feature_name = str(feature_name)
+    if feature_name.startswith("num__"):
+        return feature_name.replace("num__", "", 1)
+    if feature_name.startswith("low_cat__"):
+        label = feature_name.replace("low_cat__", "", 1)
+        parts = label.split("_")
+        if len(parts) >= 2:
+            for index in range(len(parts) - 1, 0, -1):
+                candidate = "_".join(parts[:index])
+                value = "_".join(parts[index:])
+                if candidate in set(load_metadata().get("categorical_columns", [])):
+                    return f"{candidate} = {value}"
+        return label
+    return feature_name
+
+
 def build_input_form() -> tuple[dict, bool]:
     st.subheader("Booking Intake")
     meal_options = load_unique_options(
@@ -1294,38 +1311,61 @@ def build_input_form() -> tuple[dict, bool]:
 
 
 def render_shap_section(model, prepared_row: pd.DataFrame) -> None:
-    st.subheader("Explainability")
+    st.subheader("SHAP & Feature Explanation")
     metadata = load_metadata()
     shap_summary = explain_single_prediction(model, prepared_row, metadata)
     if shap_summary is None:
-        st.info("Feature explanation is not available for the current deployed model.")
+        st.warning("Feature explanation could not be generated for this prediction.")
         return
 
     st.caption(
+        "This view shows which booking fields pushed the cancellation risk up or down for the current case. "
         f"Prediction uses only the current booking values and the saved trained model. "
         f"Explanation method: {shap_summary.method}."
     )
 
     contribution_df = shap_summary.top_contributions.copy()
+    contribution_df["display_feature"] = contribution_df["feature"].apply(prettify_feature_label)
     contribution_df["impact_direction"] = contribution_df["shap_value"].apply(
         lambda value: "Increase Risk" if value >= 0 else "Decrease Risk"
     )
     figure = px.bar(
         contribution_df.sort_values("shap_value"),
         x="shap_value",
-        y="feature",
+        y="display_feature",
         color="impact_direction",
         orientation="h",
         color_discrete_map={
             "Increase Risk": "#b42318",
             "Decrease Risk": "#027a48",
         },
-        title="Top SHAP Drivers",
+        title="Top Feature Drivers",
     )
     figure.update_layout(height=420, margin=dict(l=10, r=10, t=50, b=10))
     st.plotly_chart(figure, use_container_width=True)
+    increase_col, decrease_col = st.columns(2)
+    with increase_col:
+        st.markdown("**Strongest Risk Increases**")
+        st.dataframe(
+            contribution_df[contribution_df["shap_value"] >= 0][["display_feature", "feature_value", "shap_value"]]
+            .sort_values("shap_value", ascending=False)
+            .head(5)
+            .rename(columns={"display_feature": "feature"}),
+            use_container_width=True,
+        )
+    with decrease_col:
+        st.markdown("**Strongest Risk Decreases**")
+        st.dataframe(
+            contribution_df[contribution_df["shap_value"] < 0][["display_feature", "feature_value", "shap_value"]]
+            .sort_values("shap_value")
+            .head(5)
+            .rename(columns={"display_feature": "feature"}),
+            use_container_width=True,
+        )
     st.dataframe(
-        contribution_df[["feature", "feature_value", "shap_value", "impact_direction"]],
+        contribution_df[["display_feature", "feature_value", "shap_value", "impact_direction"]].rename(
+            columns={"display_feature": "feature"}
+        ),
         use_container_width=True,
     )
 
@@ -1460,9 +1500,10 @@ def main() -> None:
                 """,
                 unsafe_allow_html=True,
             )
+            st.info("Open the `Feature Explanation (SHAP)` tab to see the strongest factors behind this prediction.")
 
-            overview_tab, drivers_tab, model_tab = st.tabs(
-                ["Decision Overview", "Drivers & Segments", "Model Quality"]
+            overview_tab, explanation_tab, drivers_tab, model_tab = st.tabs(
+                ["Decision Overview", "Feature Explanation (SHAP)", "Drivers & Segments", "Model Quality"]
             )
 
             with overview_tab:
@@ -1474,11 +1515,13 @@ def main() -> None:
                     bool(metadata.get("calibrated_model_available")),
                 )
 
+            with explanation_tab:
+                raw_prepared = align_to_model_schema(prepare_single_input(booking), raw_explainer_model, metadata)
+                render_shap_section(raw_explainer_model, raw_prepared)
+
             with drivers_tab:
                 render_rationale_panel(booking, final_probability)
                 render_price_sensitivity(booking, model, metadata)
-                raw_prepared = align_to_model_schema(prepare_single_input(booking), raw_explainer_model, metadata)
-                render_shap_section(raw_explainer_model, raw_prepared)
 
                 if artifact_exists(CONFIG.artifacts_dir / "guest_segmentation.joblib"):
                     cluster_model, cluster_profiles, diagnostics = load_cached_cluster_assets()
