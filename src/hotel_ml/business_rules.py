@@ -18,7 +18,6 @@ def evaluate_booking_business_risk(booking: dict, model_probability: float) -> B
     reasons: list[str] = []
     adjusted_probability = _clamp(model_probability)
     history_floor = 0.0
-    history_cap = 0.99
 
     previous_cancellations = int(booking.get("no_of_previous_cancellations", 0))
     previous_non_canceled = int(booking.get("no_of_previous_bookings_not_canceled", 0))
@@ -27,6 +26,8 @@ def evaluate_booking_business_risk(booking: dict, model_probability: float) -> B
     special_requests = int(booking.get("no_of_special_requests", 0))
     parking_needed = int(booking.get("required_car_parking_space", 0))
     avg_price_per_room = float(booking.get("avg_price_per_room", 0.0))
+    booking_changes = int(booking.get("booking_changes", 0))
+    days_in_waiting_list = int(booking.get("days_in_waiting_list", 0))
     total_nights = int(
         booking.get(
             "total_nights",
@@ -53,13 +54,11 @@ def evaluate_booking_business_risk(booking: dict, model_probability: float) -> B
         reasons.append(reason)
 
     if previous_non_canceled == 0 and previous_cancellations >= 1:
-        monotonic_floor = min(0.86 + (0.02 * previous_cancellations), 0.97)
-        monotonic_cap = min(0.87 + (0.025 * previous_cancellations), 0.985)
+        monotonic_floor = min(0.78 + (0.025 * previous_cancellations), 0.96)
         history_floor = max(
             history_floor,
             monotonic_floor,
         )
-        history_cap = min(history_cap, monotonic_cap)
         reasons.append(
             "With no successful stays on record, larger prior-cancellation counts are treated as progressively riskier."
         )
@@ -186,16 +185,18 @@ def evaluate_booking_business_risk(booking: dict, model_probability: float) -> B
             "Higher nightly price with no deposit protection can make a booking easier to abandon.",
         )
 
-    if deposit_type == "Refundable" and avg_price_per_room >= 180:
+    if deposit_type == "Refundable" and avg_price_per_room >= 220:
         bump_up(
-            0.06,
+            0.10,
+            "Very high nightly price under refundable terms creates strong cancellation pressure because the guest keeps flexibility.",
+        )
+    elif deposit_type == "Refundable" and avg_price_per_room >= 180:
+        bump_up(
+            0.07,
             "Higher nightly price matters more when the booking remains refundable and the guest can exit cheaply.",
         )
     elif deposit_type == "Refundable" and avg_price_per_room >= 120:
-        bump_up(
-            0.03,
-            "Moderately high nightly rate adds extra cancellation pressure for a refundable booking.",
-        )
+        bump_up(0.04, "Moderately high nightly rate adds extra cancellation pressure for a refundable booking.")
     elif deposit_type == "Non Refund" and avg_price_per_room >= 180:
         bump_down(
             0.02,
@@ -217,8 +218,29 @@ def evaluate_booking_business_risk(booking: dict, model_probability: float) -> B
     if severe_history_profile:
         history_floor = max(history_floor, 0.88)
 
+    if booking_changes >= 4:
+        bump_up(
+            0.06,
+            "Frequent booking amendments usually signal unstable travel plans and higher cancellation risk.",
+        )
+    elif booking_changes >= 1:
+        bump_up(
+            0.03,
+            "Even a small number of booking changes can indicate a less settled reservation.",
+        )
+
+    if days_in_waiting_list >= 30:
+        bump_up(
+            0.03,
+            "A long waiting-list period can reflect a less stable reservation path, though this signal is usually weaker than lead time or history.",
+        )
+    elif days_in_waiting_list >= 7:
+        bump_up(
+            0.015,
+            "Some waiting-list exposure adds a mild instability signal.",
+        )
+
     adjusted_probability = max(adjusted_probability, history_floor)
-    adjusted_probability = min(adjusted_probability, history_cap)
 
     if adjusted_probability >= 0.60:
         return BusinessDecision("High Risk", adjusted_probability, reasons)

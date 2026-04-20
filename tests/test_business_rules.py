@@ -10,6 +10,8 @@ def _base_booking() -> dict:
         "market_segment_type": "Direct",
         "deposit_type": "No Deposit",
         "avg_price_per_room": 95.0,
+        "booking_changes": 0,
+        "days_in_waiting_list": 0,
         "no_of_special_requests": 1,
         "required_car_parking_space": 0,
         "no_of_weekend_nights": 1,
@@ -102,3 +104,33 @@ def test_history_risk_grows_monotonically_when_success_stays_do_not_grow() -> No
         probabilities.append(decision.adjusted_probability)
 
     assert probabilities == sorted(probabilities)
+
+
+def test_booking_changes_raise_operational_risk() -> None:
+    stable = _base_booking()
+    changing = _base_booking()
+    changing["booking_changes"] = 4
+
+    stable_decision = evaluate_booking_business_risk(stable, model_probability=0.52)
+    changing_decision = evaluate_booking_business_risk(changing, model_probability=0.52)
+
+    assert changing_decision.adjusted_probability > stable_decision.adjusted_probability
+
+
+def test_refundable_high_price_is_not_flattened_by_single_cancellation_history() -> None:
+    lower_price = _base_booking()
+    lower_price["deposit_type"] = "Refundable"
+    lower_price["avg_price_per_room"] = 95.0
+    lower_price["no_of_previous_cancellations"] = 1
+    lower_price["no_of_previous_bookings_not_canceled"] = 0
+
+    higher_price = _base_booking()
+    higher_price["deposit_type"] = "Refundable"
+    higher_price["avg_price_per_room"] = 260.0
+    higher_price["no_of_previous_cancellations"] = 1
+    higher_price["no_of_previous_bookings_not_canceled"] = 0
+
+    lower_decision = evaluate_booking_business_risk(lower_price, model_probability=0.90)
+    higher_decision = evaluate_booking_business_risk(higher_price, model_probability=0.90)
+
+    assert higher_decision.adjusted_probability > lower_decision.adjusted_probability
