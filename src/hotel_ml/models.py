@@ -30,15 +30,6 @@ except Exception:
     Adam = None
     TENSORFLOW_AVAILABLE = False
 
-try:
-    from xgboost import XGBClassifier
-
-    XGBOOST_AVAILABLE = True
-except Exception:
-    XGBClassifier = None
-    XGBOOST_AVAILABLE = False
-
-
 @dataclass
 class ModelSpec:
     name: str
@@ -172,29 +163,6 @@ def get_model_specs(include_svm: bool = False) -> list[ModelSpec]:
             complexity="Medium",
         ),
     ]
-
-    if XGBOOST_AVAILABLE:
-        specs.append(
-            ModelSpec(
-                name="XGBoost",
-                estimator=XGBClassifier(
-                    objective="binary:logistic",
-                    eval_metric="logloss",
-                    tree_method="hist",
-                    n_estimators=400,
-                    learning_rate=0.05,
-                    max_depth=5,
-                    min_child_weight=2,
-                    subsample=0.85,
-                    colsample_bytree=0.85,
-                    reg_lambda=1.0,
-                    reg_alpha=0.0,
-                    random_state=CONFIG.random_state,
-                    n_jobs=-1,
-                ),
-                complexity="High",
-            )
-        )
 
     specs.extend(
         [

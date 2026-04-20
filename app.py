@@ -573,17 +573,17 @@ def render_hero() -> None:
                     </div>
                     <div>
                         <div class="hero-title">Hotel Cancellation Prediction</div>
-                        <div class="hero-sub">Professional reservation-risk intelligence with stronger pricing logic, animated decision feedback, and a disciplined 8-model benchmark set for decision support.</div>
+                        <div class="hero-sub">Professional reservation-risk intelligence with stronger pricing logic, animated decision feedback, and a disciplined 7-model benchmark set for decision support.</div>
                     </div>
                 </div>
                 <div class="hero-sidecard">
                     <div class="hero-sidecard-label">Active Model Bench</div>
-                    <div class="hero-sidecard-value">8 Models • Hold-Out Tested</div>
+                    <div class="hero-sidecard-value">7 Models • Hold-Out Tested</div>
                 </div>
             </div>
             <div class="chip-row">
                 <div class="chip">Hold-out Testing</div>
-                <div class="chip">8 Approved Models</div>
+                <div class="chip">7 Approved Models</div>
                 <div class="chip">SMOTE-NC Training</div>
                 <div class="chip">Operational Review Layer</div>
                 <div class="chip">Animated Decision UI</div>
@@ -596,7 +596,7 @@ def render_hero() -> None:
 
 def render_plain_header() -> None:
     st.title("Hotel Reservation Intelligence")
-    st.caption("Cancellation scoring with the approved 8-model set, hotel-friendly business review, premium UI, and explainability.")
+    st.caption("Cancellation scoring with the approved 7-model set, hotel-friendly business review, premium UI, and explainability.")
 
 
 def render_section_note() -> None:
@@ -629,7 +629,7 @@ def render_workflow_strip() -> None:
             </div>
             <div class="pro-tile">
                 <div class="pro-kicker">Model Set</div>
-                <div class="pro-title">NB · LR · KNN · DT · RF · XGB · MLP · SVM</div>
+                <div class="pro-title">NB · LR · KNN · DT · RF · MLP · SVM</div>
             </div>
         </div>
         """,
@@ -639,8 +639,8 @@ def render_workflow_strip() -> None:
 
 def render_model_lineup_note() -> None:
     st.caption(
-        "Approved benchmark lineup: Naive Bayes, Logistic Regression, KNN, Decision Tree, Random Forest, XGBoost, MLP, and SVM. "
-        "1D-CNN is not part of the active deployment set."
+        "Approved benchmark lineup: Naive Bayes, Logistic Regression, KNN, Decision Tree, Random Forest, MLP, and SVM. "
+        "XGBoost and 1D-CNN are not part of the active deployment set."
     )
 
 
@@ -1311,7 +1311,7 @@ def main() -> None:
     render_hero()
     render_section_note()
     render_workflow_strip()
-    st.caption("Booking cancellation prediction with SMOTE-NC balancing, hold-out testing, the approved 8-model benchmark set, and safer operational rules.")
+    st.caption("Booking cancellation prediction with SMOTE-NC balancing, hold-out testing, the approved 7-model benchmark set, and safer operational rules.")
 
     best_model_path = CONFIG.artifacts_dir / "best_cancellation_model.joblib"
     comparison_path = CONFIG.artifacts_dir / "model_comparison.csv"
@@ -1456,8 +1456,21 @@ def main() -> None:
                     cluster_model, cluster_profiles, diagnostics = load_cached_cluster_assets()
                     segment_features = prepared.reindex(columns=metadata.get("segmentation_features", []), fill_value=0)
                     cluster_id = int(cluster_model.predict(segment_features)[0])
+                    cluster_row = cluster_profiles[cluster_profiles["cluster"] == cluster_id]
+                    segment_name = (
+                        str(cluster_row.iloc[0]["segment_name"])
+                        if not cluster_row.empty and "segment_name" in cluster_row.columns
+                        else f"Cluster {cluster_id}"
+                    )
                     st.subheader("Guest Segment")
-                    st.write(f"Assigned cluster: `{cluster_id}`")
+                    st.write(f"Assigned segment: `{segment_name}`")
+                    st.caption(f"Segment id: `{cluster_id}`")
+                    metric_col1, metric_col2 = st.columns(2)
+                    metric_col1.metric("Segments Found", int(len(cluster_profiles)))
+                    metric_col2.metric(
+                        "Assigned Segment Size",
+                        int(cluster_row.iloc[0]["cluster_size"]) if not cluster_row.empty and "cluster_size" in cluster_row.columns else "N/A",
+                    )
                     st.dataframe(cluster_profiles, use_container_width=True)
 
                     diag_df = pd.DataFrame(diagnostics["diagnostics"])

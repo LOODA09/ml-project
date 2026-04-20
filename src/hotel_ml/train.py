@@ -90,51 +90,69 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
     x, y = split_features_target(df)
     x = select_model_features(x)
     segmentation_features = get_segmentation_features(df)
-    schema = infer_feature_schema(x)
+    bootstrap_rows = min(len(x), 1500)
+    if bootstrap_rows < len(x):
+        x_bootstrap, _, y_bootstrap, _ = train_test_split(
+            x,
+            y,
+            train_size=bootstrap_rows,
+            random_state=CONFIG.random_state,
+            stratify=y,
+        )
+    else:
+        x_bootstrap, y_bootstrap = x, y
+
+    schema = infer_feature_schema(x_bootstrap)
     x_train, x_test, y_train, y_test = train_test_split(
-        x,
-        y,
+        x_bootstrap,
+        y_bootstrap,
         test_size=CONFIG.test_size,
         random_state=CONFIG.random_state,
-        stratify=y,
+        stratify=y_bootstrap,
     )
 
     model_specs = get_model_specs(include_svm=True)
-    preferred_names = ["XGBoost", "Random Forest", "Decision Tree", "SVM", "MLP", "KNN", "Naive Bayes"]
+    evaluation_results = []
+    for spec in model_specs:
+        evaluation_pipeline = build_training_pipeline(spec.estimator, schema)
+        result, _ = evaluate_model(
+            spec.name,
+            evaluation_pipeline,
+            x_train,
+            x_test,
+            y_train,
+            y_test,
+            spec.complexity,
+        )
+        evaluation_results.append(result)
+
+    results_df = results_to_dataframe(evaluation_results)
+    best_model_name = str(results_df.iloc[0]["model_name"])
     specs_by_name = {spec.name: spec for spec in model_specs}
-    chosen_spec = None
-    for name in preferred_names:
-        if name in specs_by_name:
-            chosen_spec = specs_by_name[name]
-            break
-    if chosen_spec is None:
-        raise RuntimeError("No supported deployment model is available.")
+    chosen_spec = specs_by_name[best_model_name]
 
-    evaluation_pipeline = build_training_pipeline(chosen_spec.estimator, schema)
-    result, _ = evaluate_model(
-        f"{chosen_spec.name} (Bootstrap)",
-        evaluation_pipeline,
-        x_train,
-        x_test,
-        y_train,
-        y_test,
-        chosen_spec.complexity,
-    )
-
-    deployed_pipeline = build_training_pipeline(
-        chosen_spec.estimator,
-        schema,
-    )
-    deployed_pipeline.fit(x, y)
-
-    results_df = results_to_dataframe([result])
+    deployed_pipeline = build_training_pipeline(chosen_spec.estimator, schema)
+    deployed_pipeline.fit(x_bootstrap, y_bootstrap)
     results_df.to_csv(CONFIG.artifacts_dir / "model_comparison.csv", index=False)
     joblib.dump(deployed_pipeline, CONFIG.artifacts_dir / "best_cancellation_model.joblib")
     joblib.dump(deployed_pipeline, CONFIG.artifacts_dir / "best_cancellation_model_raw.joblib")
 
+    segmentation_rows = min(len(segmentation_features), 10000)
+    if segmentation_rows < len(segmentation_features):
+        segmentation_sample = segmentation_features.sample(
+            n=segmentation_rows,
+            random_state=CONFIG.random_state,
+        )
+    else:
+        segmentation_sample = segmentation_features
+    clustering_model, diagnostics = find_best_kmeans(segmentation_sample)
+    cluster_labels = clustering_model.predict(segmentation_sample)
+    cluster_profile = profile_clusters(segmentation_sample, pd.Series(cluster_labels, index=segmentation_sample.index))
+    save_cluster_artifacts(clustering_model, cluster_profile, diagnostics)
+
     metadata = {
         "target_column": CONFIG.target_column,
-        "best_model_name": f"{chosen_spec.name} (Bootstrap)",
+        "best_model_name": best_model_name,
         "prediction_model_artifact": "best_cancellation_model.joblib",
         "raw_model_artifact": "best_cancellation_model_raw.joblib",
         "smote_enabled": CONFIG.smote_enabled,
@@ -155,6 +173,7 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None) -> dict:
             "test_size": CONFIG.test_size,
             "train_rows": int(len(x_train)),
             "test_rows": int(len(x_test)),
+            "bootstrap_training_rows": int(len(x_bootstrap)),
         },
         "segmentation_features": segmentation_features.columns.tolist(),
         "include_svm": True,
