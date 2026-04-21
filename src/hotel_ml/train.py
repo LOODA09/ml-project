@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 
 from .clustering import find_best_kmeans, profile_clusters, save_cluster_artifacts
 from .config import CONFIG, ensure_directories
-from .data import basic_cleaning, load_dataset, select_model_features, split_features_target
+from .data import basic_cleaning, load_dataset, resolve_dataset_path, select_model_features, split_features_target
 from .evaluate import build_confusion_payload, cross_validation_overview, evaluate_model, results_to_dataframe
 from .features import add_engineered_features, get_segmentation_features
 from .models import TENSORFLOW_AVAILABLE, get_model_specs
@@ -82,7 +82,7 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None, force: b
         with open(metadata_path, "r", encoding="utf-8") as file:
             return json.load(file)
 
-    resolved_data_path = data_path or (CONFIG.processed_dir.parent / "raw" / "hotels.csv")
+    resolved_data_path = resolve_dataset_path(data_path or (CONFIG.processed_dir.parent / "raw" / "hotels.csv"))
     df = load_dataset(resolved_data_path)
     df = basic_cleaning(df)
     df = add_engineered_features(df)
@@ -151,8 +151,15 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None, force: b
     else:
         segmentation_sample = segmentation_features
     clustering_model, diagnostics = find_best_kmeans(segmentation_sample)
-    cluster_labels = clustering_model.predict(segmentation_sample)
-    cluster_profile = profile_clusters(segmentation_sample, pd.Series(cluster_labels, index=segmentation_sample.index))
+    cluster_labels = clustering_model.predict(segmentation_features)
+    cluster_profile = profile_clusters(segmentation_features, pd.Series(cluster_labels, index=segmentation_features.index))
+    diagnostics.update(
+        {
+            "fit_rows": int(len(segmentation_sample)),
+            "profile_rows": int(len(segmentation_features)),
+            "bootstrap_fit_sample": bool(len(segmentation_sample) < len(segmentation_features)),
+        }
+    )
     save_cluster_artifacts(clustering_model, cluster_profile, diagnostics)
 
     metadata = {
@@ -185,6 +192,8 @@ def bootstrap_deployment_artifacts(data_path: str | Path | None = None, force: b
         "include_svm": True,
         "bootstrap_artifacts": True,
         "deployment_model_strategy": "composite_metric_leader",
+        "source_dataset": str(resolved_data_path),
+        "source_dataset_name": Path(resolved_data_path).name,
     }
     with open(metadata_path, "w", encoding="utf-8") as file:
         json.dump(metadata, file, indent=2)
@@ -209,7 +218,8 @@ def train_all(
         }
     )
     print("[1/4] Loading and preparing dataset...", flush=True)
-    df = load_dataset(data_path)
+    resolved_data_path = resolve_dataset_path(data_path)
+    df = load_dataset(resolved_data_path)
     df = basic_cleaning(df)
     df = add_engineered_features(df)
 
@@ -347,6 +357,13 @@ def train_all(
     clustering_model, diagnostics = find_best_kmeans(segmentation_features)
     cluster_labels = clustering_model.predict(segmentation_features)
     cluster_profile = profile_clusters(segmentation_features, pd.Series(cluster_labels))
+    diagnostics.update(
+        {
+            "fit_rows": int(len(segmentation_features)),
+            "profile_rows": int(len(segmentation_features)),
+            "bootstrap_fit_sample": False,
+        }
+    )
     save_cluster_artifacts(clustering_model, cluster_profile, diagnostics)
 
     print("[4/4] Saving metadata and processed dataset...", flush=True)
@@ -377,6 +394,8 @@ def train_all(
         },
         "segmentation_features": segmentation_features.columns.tolist(),
         "include_svm": include_svm,
+        "source_dataset": str(resolved_data_path),
+        "source_dataset_name": Path(resolved_data_path).name,
     }
     with open(CONFIG.artifacts_dir / "training_metadata.json", "w", encoding="utf-8") as file:
         json.dump(metadata, file, indent=2)

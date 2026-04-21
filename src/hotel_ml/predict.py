@@ -34,6 +34,18 @@ def prepare_single_input(record: dict) -> pd.DataFrame:
     return add_engineered_features(df)
 
 
+def prepare_segmentation_input(record: dict, segmentation_columns: list[str]) -> pd.DataFrame:
+    engineered = prepare_single_input(record)
+    if not segmentation_columns:
+        return engineered
+
+    aligned = engineered.copy()
+    for column in segmentation_columns:
+        if column not in aligned.columns:
+            aligned[column] = 0
+    return aligned.reindex(columns=segmentation_columns)
+
+
 def infer_training_columns_from_model(model) -> tuple[list[str], set[str]]:
     preprocess = _extract_preprocessor(model)
     if preprocess is None or not hasattr(preprocess, "transformers_"):

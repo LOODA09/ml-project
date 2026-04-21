@@ -2,6 +2,7 @@ import pandas as pd
 
 from src.hotel_ml.data import basic_cleaning, split_features_target
 from src.hotel_ml.features import add_engineered_features
+from src.hotel_ml.predict import prepare_segmentation_input
 
 
 def test_target_mapping_from_booking_status() -> None:
@@ -96,3 +97,30 @@ def test_missing_deposit_type_defaults_to_no_deposit() -> None:
 
     cleaned = basic_cleaning(df)
     assert cleaned.loc[0, "deposit_type"] == "No Deposit"
+
+
+def test_prepare_segmentation_input_keeps_engineered_guest_totals() -> None:
+    booking = {
+        "no_of_adults": 2,
+        "no_of_children": 2,
+        "no_of_weekend_nights": 1,
+        "no_of_week_nights": 3,
+        "lead_time": 45,
+        "avg_price_per_room": 120.0,
+        "booking_changes": 1,
+        "days_in_waiting_list": 5,
+        "deposit_type": "Refundable",
+        "repeated_guest": 0,
+        "no_of_previous_cancellations": 1,
+        "no_of_previous_bookings_not_canceled": 0,
+        "required_car_parking_space": 0,
+        "no_of_special_requests": 1,
+    }
+
+    prepared = prepare_segmentation_input(
+        booking,
+        ["total_guests", "total_nights", "lead_time", "avg_price_per_room"],
+    )
+
+    assert prepared.loc[0, "total_guests"] == 4
+    assert prepared.loc[0, "total_nights"] == 4

@@ -1,33 +1,36 @@
 {
-  "best_score": 0.496003118032368,
+  "best_score": 0.40353381194492005,
   "diagnostics": [
     {
       "k": 2,
-      "silhouette_score": 0.496003118032368
+      "silhouette_score": 0.3308841377497851
     },
     {
       "k": 3,
-      "silhouette_score": 0.49334637648368534
+      "silhouette_score": 0.3663397319061237
     },
     {
       "k": 4,
-      "silhouette_score": 0.2328603524780502
+      "silhouette_score": 0.3736526592615324
     },
     {
       "k": 5,
-      "silhouette_score": 0.2297113123290704
+      "silhouette_score": 0.40353381194492005
     },
     {
       "k": 6,
-      "silhouette_score": 0.2430904615332781
+      "silhouette_score": 0.2339384260160118
     },
     {
       "k": 7,
-      "silhouette_score": 0.2492797005807961
+      "silhouette_score": 0.23448958375174894
     },
     {
       "k": 8,
-      "silhouette_score": 0.24994951091296888
+      "silhouette_score": 0.23998163847765208
     }
-  ]
+  ],
+  "fit_rows": 10000,
+  "profile_rows": 119390,
+  "bootstrap_fit_sample": true
 }

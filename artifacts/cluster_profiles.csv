@@ -1,3 +1,6 @@
-cluster,segment_name,cluster_size,lead_time,avg_price_per_room,total_guests,total_nights,no_of_previous_cancellations,no_of_previous_bookings_not_canceled,required_car_parking_space,no_of_special_requests
-0,Early Uncertain Bookers,9416,107.6,100.99,1.96,3.43,0.09,0.09,0.0,0.55
-1,Loyal Planned Guests,584,57.99,111.06,2.19,3.21,0.06,0.78,1.0,0.88
+cluster,segment_name,cluster_size,cluster_share,lead_time,avg_price_per_room,total_guests,total_nights,booking_changes,days_in_waiting_list,repeated_guest,has_refundable_deposit,has_non_refundable_deposit,no_of_previous_cancellations,no_of_previous_bookings_not_canceled,historical_cancellation_ratio,required_car_parking_space,no_of_special_requests
+0,Repeat Cancellation Risk (repeat-heavy),3829,0.0321,30.62,64.26,1.41,1.92,0.27,0.11,0.99,0.0,0.02,0.43,3.82,0.13,0.16,0.63
+1,Repeat Cancellation Risk (non-refundable),5478,0.0459,218.13,78.31,1.86,2.85,0.03,4.81,0.0,0.0,0.65,1.58,0.0,1.0,0.0,0.13
+2,Early Uncertain Bookers,103130,0.8638,103.61,103.52,1.97,3.53,0.22,2.41,0.0,0.0,0.11,0.0,0.01,0.0,0.0,0.58
+3,Flexible Change-Prone Guests,162,0.0014,152.1,76.21,1.94,3.83,0.59,9.59,0.02,1.0,0.0,0.0,0.02,0.0,0.12,0.14
+4,Drive-In Practical Guests,6791,0.0569,58.36,116.96,2.16,3.25,0.39,0.1,0.0,0.0,0.0,0.01,0.08,0.0,1.01,0.83

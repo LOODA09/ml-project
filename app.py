@@ -28,6 +28,7 @@ from src.hotel_ml.predict import (
     load_best_model,
     load_metadata,
     load_raw_model,
+    prepare_segmentation_input,
     prepare_single_input,
 )
 from src.hotel_ml.train import bootstrap_deployment_artifacts
@@ -1567,7 +1568,10 @@ def main() -> None:
 
                 if artifact_exists(CONFIG.artifacts_dir / "guest_segmentation.joblib"):
                     cluster_model, cluster_profiles, diagnostics = load_cached_cluster_assets()
-                    segment_features = prepared.reindex(columns=metadata.get("segmentation_features", []), fill_value=0)
+                    segment_features = prepare_segmentation_input(
+                        booking,
+                        metadata.get("segmentation_features", []),
+                    )
                     cluster_id = int(cluster_model.predict(segment_features)[0])
                     cluster_row = cluster_profiles[cluster_profiles["cluster"] == cluster_id]
                     segment_name = (
@@ -1578,12 +1582,23 @@ def main() -> None:
                     st.subheader("Guest Segment")
                     st.write(f"Assigned segment: `{segment_name}`")
                     st.caption(f"Segment id: `{cluster_id}`")
-                    metric_col1, metric_col2 = st.columns(2)
+                    metric_col1, metric_col2, metric_col3 = st.columns(3)
                     metric_col1.metric("Segments Found", int(len(cluster_profiles)))
                     metric_col2.metric(
                         "Assigned Segment Size",
                         int(cluster_row.iloc[0]["cluster_size"]) if not cluster_row.empty and "cluster_size" in cluster_row.columns else "N/A",
                     )
+                    metric_col3.metric(
+                        "Assigned Segment Share",
+                        f'{float(cluster_row.iloc[0]["cluster_share"]):.1%}'
+                        if not cluster_row.empty and "cluster_share" in cluster_row.columns
+                        else "N/A",
+                    )
+                    if diagnostics.get("profile_rows"):
+                        st.caption(
+                            f"Segment profile rows: {int(diagnostics['profile_rows']):,}. "
+                            f"K-Means fit rows: {int(diagnostics.get('fit_rows', diagnostics['profile_rows'])):,}."
+                        )
                     st.dataframe(cluster_profiles, use_container_width=True)
 
                     diag_df = pd.DataFrame(diagnostics["diagnostics"])

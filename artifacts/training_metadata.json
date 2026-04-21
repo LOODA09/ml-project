@@ -74,12 +74,20 @@
     "avg_price_per_room",
     "total_guests",
     "total_nights",
+    "booking_changes",
+    "days_in_waiting_list",
+    "repeated_guest",
+    "has_refundable_deposit",
+    "has_non_refundable_deposit",
     "no_of_previous_cancellations",
     "no_of_previous_bookings_not_canceled",
+    "historical_cancellation_ratio",
     "required_car_parking_space",
     "no_of_special_requests"
   ],
   "include_svm": true,
   "bootstrap_artifacts": true,
-  "deployment_model_strategy": "composite_metric_leader"
+  "deployment_model_strategy": "composite_metric_leader",
+  "source_dataset": "data\\raw\\hotels.csv",
+  "source_dataset_name": "hotels.csv"
 }
